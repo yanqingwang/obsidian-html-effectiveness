@@ -138,24 +138,25 @@ function mdToHtml(md: string): string {
 }
 
 function processTemplate(container: HTMLElement, content: string, meta: TemplateMeta): void {
+	const safe = container.createDiv();
 	switch (meta.type) {
 		case 'compare':
-			container.innerHTML = renderCompare(content, meta);
+			safe.innerHTML = renderCompare(content, meta);
 			break;
 		case 'timeline':
-			container.innerHTML = renderTimeline(content, meta);
+			safe.innerHTML = renderTimeline(content, meta);
 			break;
 		case 'diagram':
-			container.innerHTML = renderDiagram(content, meta);
+			safe.innerHTML = renderDiagram(content, meta);
 			break;
 		case 'report':
-			container.innerHTML = renderReport(content, meta);
+			safe.innerHTML = renderReport(content, meta);
 			break;
 		case 'slides':
-			renderSlides(container, content, meta);
+			renderSlides(safe, content, meta);
 			break;
 		default:
-			container.innerHTML = `<div class="he-error">Unknown template type: ${escapeHtml(meta.type)}</div>`;
+			safe.innerHTML = `<div class="he-error">Unknown template type: ${escapeHtml(meta.type)}</div>`;
 	}
 }
 
