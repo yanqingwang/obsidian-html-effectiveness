@@ -163,8 +163,8 @@ function processTemplate(container, content, meta) {
       container.innerHTML = `<div class="he-error">Unknown template type: ${escapeHtml(meta.type)}</div>`;
   }
 }
-function processor(source, el, _ctx) {
-  let meta = { type: "report", theme: "dark" };
+function processor(source, el, _ctx, defaultTheme = "dark") {
+  let meta = { type: "report", theme: defaultTheme };
   let content = source;
   const firstNl = source.indexOf("\n");
   if (firstNl > 0) {
@@ -262,7 +262,9 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
   }
   async onload() {
     await this.loadSettings();
-    this.registerMarkdownCodeBlockProcessor("html-effect", processor);
+    this.registerMarkdownCodeBlockProcessor("html-effect", (source, el, ctx) => {
+      processor(source, el, ctx, this.settings.defaultTheme);
+    });
     this.addCommand({
       id: "export-html-effectiveness",
       name: "Export note as HTML Effectiveness",

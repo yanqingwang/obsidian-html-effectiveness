@@ -160,8 +160,8 @@ function processTemplate(container: HTMLElement, content: string, meta: Template
 }
 
 // ─── Code Block Processor ───────────────────────────────────
-function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorContext) {
-	let meta: TemplateMeta = { type: 'report', theme: 'dark' };
+function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorContext, defaultTheme: string = 'dark') {
+	let meta: TemplateMeta = { type: 'report', theme: defaultTheme as 'dark' | 'light' };
 	let content = source;
 	const firstNl = source.indexOf('\n');
 	if (firstNl > 0) {
@@ -259,7 +259,9 @@ export default class HEExtPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		this.registerMarkdownCodeBlockProcessor('html-effect', processor);
+		this.registerMarkdownCodeBlockProcessor('html-effect', (source, el, ctx) => {
+			processor(source, el, ctx, this.settings.defaultTheme);
+		});
 
 		this.addCommand({
 			id: 'export-html-effectiveness',
