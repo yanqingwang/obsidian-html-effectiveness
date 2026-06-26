@@ -1,0 +1,53 @@
+/* ── HTML Effectiveness Plugin Styles ── */
+
+/* Wrapper: ensure dark/light context */
+.he-wrapper.dark { background: transparent; color: inherit; }
+.he-wrapper.light { background: transparent; color: inherit; }
+
+/* Compare grid */
+.he-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; border-radius: 8px; }
+.he-compare.dark { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); }
+.he-compare.light { background: var(--background-primary); border: 1px solid var(--background-modifier-border); }
+.he-col { padding: 12px; border-radius: 6px; }
+.he-compare.dark .he-col { background: var(--background-primary); }
+.he-compare.light .he-col { background: var(--background-secondary); }
+.he-col-title { font-weight: 600; font-size: 15px; margin-bottom: 8px; color: var(--text-accent); }
+.he-col-body { font-size: 13px; line-height: 1.6; }
+
+/* Timeline */
+.he-timeline { list-style: none; padding: 0; margin: 12px 0; position: relative; }
+.he-timeline::before { content: ''; position: absolute; left: 12px; top: 0; bottom: 0; width: 2px; background: var(--background-modifier-border); }
+.he-tl-item { position: relative; padding: 8px 0 8px 32px; font-size: 13px; }
+.he-tl-item::before { content: ''; position: absolute; left: 6px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: var(--interactive-accent); border: 2px solid var(--background-primary); }
+.he-tl-date { display: inline-block; font-weight: 600; color: var(--text-accent); margin-right: 8px; font-size: 12px; }
+.he-tl-text { color: var(--text-normal); }
+
+/* KPI row */
+.he-kpi-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+.he-kpi { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 8px; padding: 14px 18px; text-align: center; flex: 1; min-width: 80px; }
+.he-kpi-num { font-size: 24px; font-weight: bold; color: var(--interactive-accent); }
+.he-kpi-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+/* Report */
+.he-report { padding: 16px; border-radius: 8px; }
+.he-report.dark { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); }
+.he-report.light { background: var(--background-primary); border: 1px solid var(--background-modifier-border); }
+.he-report-body { font-size: 14px; line-height: 1.7; }
+
+/* Slides */
+.he-slides-nav { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
+.he-slides-nav button { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); color: var(--text-normal); padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+.he-slides-nav button:hover { background: var(--background-modifier-hover); }
+.he-slides { max-height: 500px; overflow-y: auto; scroll-behavior: smooth; }
+.he-slide { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 8px; padding: 24px; margin-bottom: 8px; min-height: 200px; }
+.he-slide-title { color: var(--text-accent); font-size: 20px; margin-bottom: 12px; }
+.he-slide-body { font-size: 14px; line-height: 1.7; }
+
+/* Diagram */
+.he-diagram { margin: 12px 0; }
+
+/* Responsive */
+@media (max-width: 768px) {
+	.he-compare { grid-template-columns: 1fr; }
+	.he-kpi-row { flex-direction: column; }
+}
