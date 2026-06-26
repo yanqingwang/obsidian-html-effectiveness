@@ -124,7 +124,7 @@ function mdToHtml(md: string): string {
 function processTemplate(container: HTMLElement, content: string, meta: TemplateMeta): void {
 	switch (meta.type) {
 		case 'compare':
-			container.innerHTML = `<div class="he-compare ${meta.theme || 'dark'}">${renderCompare(content, meta)}</div>`;
+			container.innerHTML = renderCompare(content, meta);
 			break;
 		case 'timeline':
 			container.innerHTML = renderTimeline(content, meta);
