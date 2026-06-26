@@ -111,13 +111,29 @@ function escapeHtml(s: string): string {
 }
 
 function mdToHtml(md: string): string {
+	// 1) Escape HTML first
 	let s = escapeHtml(md);
-	s = s.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-	s = s.replace(/`([^`]+)`/g, '<code class="he-inline-code">$1</code>');
+	// 2) Extract and protect code blocks from \n→<br> replacement
+	const blocks: string[] = [];
+	s = s.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) => {
+		blocks.push('<pre><code>' + code + '</code></pre>');
+		return '%%CODEBLOCK' + (blocks.length - 1) + '%%';
+	});
+	// 3) Extract and protect inline code
+	const inlines: string[] = [];
+	s = s.replace(/`([^`]+)`/g, (_m, code) => {
+		inlines.push('<code class="he-inline-code">' + code + '</code>');
+		return '%%INLINECODE' + (inlines.length - 1) + '%%';
+	});
+	// 4) Apply inline markdown formatting
 	s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 	s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
 	s = s.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+	// 5) Replace line breaks (safe: code blocks are placeholder-protected)
 	s = s.replace(/\n/g, '<br>');
+	// 6) Restore inline code and code blocks
+	s = s.replace(/%%INLINECODE(\d+)%%/g, (_m, id) => inlines[parseInt(id)] || '');
+	s = s.replace(/%%CODEBLOCK(\d+)%%/g, (_m, id) => blocks[parseInt(id)] || '');
 	return s;
 }
 
@@ -209,10 +225,21 @@ th { background: #161b22; color: #8b949e; }
 .he-kpi { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px 18px; text-align:center; flex:1; min-width:80px; }
 .he-kpi-num { font-size:24px; font-weight:700; color:#58a6ff; }
 .he-kpi-label { font-size:12px; color:#8b949e; }
-.he-slides-nav { text-align:center; margin-bottom:12px; }
-.he-slides-nav button { background:#21262d; border:1px solid #30363d; color:#c9d1d9; padding:6px 16px; border-radius:6px; cursor:pointer; font-size:16px; margin:0 8px; }
-.he-slide { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:24px; margin-bottom:8px; }
+.he-slides-nav { display:flex; gap:12px; align-items:center; justify-content:center; margin-bottom:12px; }
+.he-slide-btn { background:#21262d; border:1px solid #30363d; color:#c9d1d9; padding:6px 16px; border-radius:6px; cursor:pointer; font-size:16px; }
+.he-slide-btn:hover { background:#30363d; }
+.he-slide-counter { font-size:13px; color:#8b949e; min-width:60px; text-align:center; }
+.he-slide { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:24px; margin-bottom:8px; min-height:200px; }
 .he-slide-title { color:#f0883e; font-size:20px; margin-bottom:12px; }
+.he-slide-body { font-size:14px; line-height:1.7; }
+.he-report { padding:16px; border-radius:8px; background:#161b22; border:1px solid #30363d; }
+.he-report-body { font-size:14px; line-height:1.7; }
+.he-report-h3 { font-size:16px; font-weight:600; color:#d2a8ff; margin:16px 0 8px; }
+.he-diagram { margin:12px 0; }
+.he-diagram-pre { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; overflow:auto; color:#c9d1d9; font-family:monospace; font-size:13px; line-height:1.5; }
+.he-diagram-caption { color:#8b949e; font-size:12px; text-align:center; margin-top:6px; }
+.he-error { color:#f85149; padding:12px; border:1px solid #f85149; border-radius:6px; }
+.he-inline-code { background:#21262d; padding:2px 6px; border-radius:4px; font-size:0.9em; }
 </style>
 </head>
 <body>
