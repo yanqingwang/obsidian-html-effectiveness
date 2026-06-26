@@ -1,8 +1,12 @@
-/* ── HTML Effectiveness Plugin Styles ── */
+/* ── HTML Effectiveness Plugin Styles (Obsidian CSS Variables) ── */
 
-/* Wrapper: ensure dark/light context */
+/* Wrapper */
+.he-wrapper { margin: 12px 0; padding: 4px; border-radius: 8px; }
 .he-wrapper.dark { background: transparent; color: inherit; }
 .he-wrapper.light { background: transparent; color: inherit; }
+
+/* Error */
+.he-error { color: var(--text-error); padding: 12px; border: 1px solid var(--text-error); border-radius: 6px; }
 
 /* Compare grid */
 .he-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; border-radius: 8px; }
@@ -33,11 +37,13 @@
 .he-report.dark { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); }
 .he-report.light { background: var(--background-primary); border: 1px solid var(--background-modifier-border); }
 .he-report-body { font-size: 14px; line-height: 1.7; }
+.he-report-h3 { font-size: 16px; font-weight: 600; color: var(--text-accent); margin: 16px 0 8px; }
 
 /* Slides */
-.he-slides-nav { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
-.he-slides-nav button { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); color: var(--text-normal); padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 16px; }
-.he-slides-nav button:hover { background: var(--background-modifier-hover); }
+.he-slides-nav { display: flex; gap: 12px; align-items: center; justify-content: center; margin-bottom: 12px; }
+.he-slide-btn { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); color: var(--text-normal); padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+.he-slide-btn:hover { background: var(--background-modifier-hover); }
+.he-slide-counter { font-size: 13px; color: var(--text-muted); min-width: 60px; text-align: center; }
 .he-slides { max-height: 500px; overflow-y: auto; scroll-behavior: smooth; }
 .he-slide { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 8px; padding: 24px; margin-bottom: 8px; min-height: 200px; }
 .he-slide-title { color: var(--text-accent); font-size: 20px; margin-bottom: 12px; }
@@ -45,6 +51,11 @@
 
 /* Diagram */
 .he-diagram { margin: 12px 0; }
+.he-diagram-pre { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 8px; padding: 16px; overflow: auto; color: var(--text-normal); font-family: var(--font-monospace); font-size: 13px; line-height: 1.5; }
+.he-diagram-caption { color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 6px; }
+
+/* Inline code */
+.he-inline-code { background: var(--background-modifier-border); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
 
 /* Responsive */
 @media (max-width: 768px) {

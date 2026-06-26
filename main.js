@@ -29,10 +29,10 @@ __export(main_exports, {
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian = require("obsidian");
-var DEFAULT_SETTINGS = { defaultTheme: "dark", autoRender: true };
+var DEFAULT_SETTINGS = { defaultTheme: "dark" };
 function renderCompare(content, meta) {
   const items = content.split("\n---\n").filter(Boolean);
-  const cols = items.map((item, i) => {
+  const cols = items.map((item) => {
     const lines = item.trim().split("\n");
     const title = lines[0].replace(/^#\s*/, "");
     const body = lines.slice(1).join("\n");
@@ -52,7 +52,7 @@ function renderTimeline(content, _meta) {
   return `<ul class="he-timeline">${lis}</ul>`;
 }
 function renderDiagram(content, _meta) {
-  return `<div class="he-diagram"><pre style="background:#161b22;color:#c9d1d9;padding:16px;border-radius:8px;overflow:auto;font-family:monospace;font-size:13px;line-height:1.5;">${escapeHtml(content)}</pre><p style="color:#8b949e;font-size:12px;text-align:center;margin-top:6px;">Diagram \u2014 render as SVG in a future version</p></div>`;
+  return `<div class="he-diagram"><pre class="he-diagram-pre">${escapeHtml(content)}</pre><p class="he-diagram-caption">Diagram \u2014 render as SVG in a future version</p></div>`;
 }
 function renderReport(content, meta) {
   const lines = content.trim().split("\n").filter(Boolean);
@@ -66,7 +66,7 @@ function renderReport(content, meta) {
     }
     if (line.startsWith("# ") && inKpi) {
       inKpi = false;
-      body += `<h3>${escapeHtml(line.replace(/^#\s*/, ""))}</h3>`;
+      body += `<h3 class="he-report-h3">${escapeHtml(line.replace(/^#\s*/, ""))}</h3>`;
       continue;
     }
     if (inKpi) {
@@ -81,93 +81,79 @@ function renderReport(content, meta) {
   const kpiHtml = kpis ? `<div class="he-kpi-row">${kpis}</div>` : "";
   return `<div class="he-report ${meta.theme || "dark"}">${kpiHtml}<div class="he-report-body">${body}</div></div>`;
 }
-function renderSlides(content, _meta) {
+function renderSlides(container, content, _meta) {
   const slides = content.split("\n---\n").filter(Boolean);
-  const slidesHtml = slides.map((slide, i) => {
+  const slideDivs = [];
+  let currentIdx = 0;
+  const nav = container.createEl("div", { cls: "he-slides-nav" });
+  const prevBtn = nav.createEl("button", { text: "\u25C0", cls: "he-slide-btn" });
+  const counter = nav.createEl("span", { cls: "he-slide-counter" });
+  const nextBtn = nav.createEl("button", { text: "\u25B6", cls: "he-slide-btn" });
+  const slidesWrap = container.createEl("div", { cls: "he-slides" });
+  slides.forEach((slide, i) => {
     const lines = slide.trim().split("\n");
     const title = lines[0].replace(/^#\s*/, "");
     const body = lines.slice(1).join("\n");
-    return `<div class="he-slide" data-index="${i}"><h2 class="he-slide-title">${escapeHtml(title)}</h2><div class="he-slide-body">${mdToHtml(body)}</div></div>`;
-  }).join("");
-  return `<div class="he-slides-container"><div class="he-slides-nav"><button class="he-slide-prev" onclick="this.parentElement.nextElementSibling.querySelector('.he-slide:not([hidden])').previousElementSibling?.scrollIntoView({behavior:'smooth'})">\u25C0</button><button class="he-slide-next" onclick="this.parentElement.nextElementSibling.querySelector('.he-slide:not([hidden])').nextElementSibling?.scrollIntoView({behavior:'smooth'})">\u25B6</button></div><div class="he-slides">${slidesHtml}</div></div>`;
+    const sd = slidesWrap.createEl("div", { cls: "he-slide", attr: { "data-index": String(i) } });
+    if (i > 0)
+      sd.style.display = "none";
+    sd.createEl("h2", { cls: "he-slide-title", text: escapeHtml(title) });
+    const sb = sd.createEl("div", { cls: "he-slide-body" });
+    sb.innerHTML = mdToHtml(body);
+    slideDivs.push(sd);
+  });
+  const showSlide = (idx) => {
+    slideDivs.forEach((s, i) => {
+      s.style.display = i === idx ? "" : "none";
+    });
+    counter.textContent = `${idx + 1} / ${slideDivs.length}`;
+    currentIdx = idx;
+  };
+  prevBtn.addEventListener("click", () => {
+    if (currentIdx > 0)
+      showSlide(currentIdx - 1);
+  });
+  nextBtn.addEventListener("click", () => {
+    if (currentIdx < slideDivs.length - 1)
+      showSlide(currentIdx + 1);
+  });
+  showSlide(0);
 }
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 function mdToHtml(md) {
-  return escapeHtml(md).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\*(.+?)\*/g, "<em>$1</em>").replace(/`(.+?)`/g, '<code style="background:#21262d;padding:2px 6px;border-radius:4px;font-size:0.9em;">$1</code>').replace(/\n/g, "<br>");
+  let s = escapeHtml(md);
+  s = s.replace(/```(\w*)\n([\s\S]*?)```/g, "<pre><code>$2</code></pre>");
+  s = s.replace(/`([^`]+)`/g, '<code class="he-inline-code">$1</code>');
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  s = s.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\n/g, "<br>");
+  return s;
 }
-function processTemplate(content, meta) {
+function processTemplate(container, content, meta) {
   switch (meta.type) {
     case "compare":
-      return renderCompare(content, meta);
+      container.innerHTML = `<div class="he-compare ${meta.theme || "dark"}">${renderCompare(content, meta)}</div>`;
+      break;
     case "timeline":
-      return renderTimeline(content, meta);
+      container.innerHTML = renderTimeline(content, meta);
+      break;
     case "diagram":
-      return renderDiagram(content, meta);
+      container.innerHTML = renderDiagram(content, meta);
+      break;
     case "report":
-      return renderReport(content, meta);
+      container.innerHTML = renderReport(content, meta);
+      break;
     case "slides":
-      return renderSlides(content, meta);
+      renderSlides(container, content, meta);
+      break;
     default:
-      return `<div style="color:#f85149;padding:12px;border:1px solid #f85149;border-radius:6px;">Unknown template type: ${meta.type}</div>`;
+      container.innerHTML = `<div class="he-error">Unknown template type: ${escapeHtml(meta.type)}</div>`;
   }
 }
-var STYLE_ID = "he-styles";
-function ensureStyles() {
-  if (document.getElementById(STYLE_ID))
-    return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
-  style.textContent = `
-.he-wrapper { margin: 12px 0; padding: 4px; border-radius: 8px; }
-.he-wrapper.dark { background: #0d1117; color: #c9d1d9; }
-.he-wrapper.light { background: #ffffff; color: #1f2328; }
-
-/* Compare */
-.he-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; border-radius: 8px; }
-.he-compare.dark { background: #161b22; border: 1px solid #30363d; }
-.he-compare.light { background: #f6f8fa; border: 1px solid #d0d7de; }
-.he-col { padding: 12px; border-radius: 6px; }
-.he-compare.dark .he-col { background: #0d1117; }
-.he-compare.light .he-col { background: #ffffff; }
-.he-col-title { font-weight: 600; font-size: 15px; margin-bottom: 8px; color: #f0883e; }
-.he-col-body { font-size: 13px; line-height: 1.6; }
-
-/* Timeline */
-.he-timeline { list-style: none; padding: 0; margin: 12px 0; position: relative; }
-.he-timeline::before { content: ''; position: absolute; left: 12px; top: 0; bottom: 0; width: 2px; background: #30363d; }
-.he-tl-item { position: relative; padding: 8px 0 8px 32px; font-size: 13px; }
-.he-tl-item::before { content: ''; position: absolute; left: 6px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: #58a6ff; border: 2px solid #0d1117; }
-.he-tl-date { display: inline-block; font-weight: 600; color: #f0883e; margin-right: 8px; font-size: 12px; }
-.he-tl-text { color: #c9d1d9; }
-
-/* KPI */
-.he-kpi-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
-.he-kpi { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; text-align: center; flex: 1; min-width: 80px; }
-.he-kpi-num { font-size: 24px; font-weight: bold; color: #58a6ff; }
-.he-kpi-label { font-size: 12px; color: #8b949e; margin-top: 4px; }
-
-/* Report */
-.he-report { padding: 16px; border-radius: 8px; }
-.he-report.dark { background: #161b22; border: 1px solid #30363d; }
-.he-report.light { background: #f6f8fa; border: 1px solid #d0d7de; }
-.he-report-body { font-size: 14px; line-height: 1.7; }
-
-/* Slides */
-.he-slides-container { position: relative; }
-.he-slides-nav { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
-.he-slides-nav button { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 16px; }
-.he-slides-nav button:hover { background: #30363d; }
-.he-slides { max-height: 500px; overflow-y: auto; scroll-behavior: smooth; }
-.he-slide { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 24px; margin-bottom: 8px; min-height: 200px; }
-.he-slide-title { color: #f0883e; font-size: 20px; margin-bottom: 12px; }
-.he-slide-body { font-size: 14px; line-height: 1.7; }
-`;
-  document.head.appendChild(style);
-}
-function processor(source, el, ctx) {
-  ensureStyles();
+function processor(source, el, _ctx) {
   let meta = { type: "report", theme: "dark" };
   let content = source;
   const firstNl = source.indexOf("\n");
@@ -195,7 +181,7 @@ function processor(source, el, ctx) {
     }
   }
   const wrapper = el.createEl("div", { cls: `he-wrapper ${meta.theme || "dark"}` });
-  wrapper.innerHTML = processTemplate(content, meta);
+  processTemplate(wrapper, content, meta);
 }
 async function exportNoteAsHTML(app) {
   const file = app.workspace.getActiveFile();
@@ -220,6 +206,23 @@ pre { background: #161b22; border: 1px solid #30363d; border-radius: 8px; paddin
 table { width: 100%; border-collapse: collapse; margin: 12px 0; }
 th, td { padding: 8px; border-bottom: 1px solid #30363d; text-align: left; }
 th { background: #161b22; color: #8b949e; }
+.he-wrapper { margin:12px 0; }
+.he-compare { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px; border-radius:8px; background:#161b22; border:1px solid #30363d; }
+.he-col { background:#0d1117; padding:12px; border-radius:6px; }
+.he-col-title { color:#f0883e; font-weight:600; font-size:15px; margin-bottom:8px; }
+.he-timeline { list-style:none; padding:0; position:relative; }
+.he-timeline::before { content:''; position:absolute; left:12px; top:0; bottom:0; width:2px; background:#30363d; }
+.he-tl-item { padding:8px 0 8px 32px; position:relative; }
+.he-tl-item::before { content:''; position:absolute; left:6px; top:14px; width:12px; height:12px; border-radius:50%; background:#58a6ff; }
+.he-tl-date { color:#f0883e; font-weight:600; margin-right:8px; }
+.he-kpi-row { display:flex; gap:12px; flex-wrap:wrap; margin:16px 0; }
+.he-kpi { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px 18px; text-align:center; flex:1; min-width:80px; }
+.he-kpi-num { font-size:24px; font-weight:700; color:#58a6ff; }
+.he-kpi-label { font-size:12px; color:#8b949e; }
+.he-slides-nav { text-align:center; margin-bottom:12px; }
+.he-slides-nav button { background:#21262d; border:1px solid #30363d; color:#c9d1d9; padding:6px 16px; border-radius:6px; cursor:pointer; font-size:16px; margin:0 8px; }
+.he-slide { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:24px; margin-bottom:8px; }
+.he-slide-title { color:#f0883e; font-size:20px; margin-bottom:12px; }
 </style>
 </head>
 <body>

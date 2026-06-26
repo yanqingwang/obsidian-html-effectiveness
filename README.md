@@ -70,7 +70,7 @@ Settings → Community Plugins → Browse → Search "HTML Effectiveness"
 ### Manual / BRAT
 
 1. Install [BRAT](https://obsidian.md/plugins?id=obsidian42-brat)
-2. Add the repository: `wangq/html-effectiveness`
+2. Add the repository: `yanqingwang/obsidian-html-effectiveness`
 
 ## Development / 开发
 
