@@ -220,6 +220,16 @@ var HEHTMLView = class extends import_obsidian.ItemView {
   getIcon() {
     return "eye";
   }
+  async setState(state) {
+    if (state?.file && typeof state.file === "string") {
+      const file = this.app.vault.getFileByPath(state.file);
+      if (file)
+        await this.setFile(file);
+    }
+  }
+  getState() {
+    return { file: this.file?.path };
+  }
   async setFile(file) {
     this.file = file;
     await this.loadContent();
@@ -238,12 +248,6 @@ var HEHTMLView = class extends import_obsidian.ItemView {
     container.appendChild(this.iframe);
   }
   async onOpen() {
-    const state = this.leaf.getViewState();
-    if (state?.state?.file) {
-      const file = this.app.vault.getFileByPath(state.state.file);
-      if (file)
-        await this.setFile(file);
-    }
   }
   async onClose() {
     this.iframe = null;
@@ -264,6 +268,37 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
       return view;
     });
     this.registerExtensions(["html"], VIEW_TYPE);
+    this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
+      if (file instanceof import_obsidian.TFile && file.extension === "html") {
+        menu.addItem((item) => {
+          item.setTitle("Open with HTML Effectiveness").setIcon("eye").onClick(async () => {
+            const leaf = this.app.workspace.getLeaf(true);
+            await leaf.setViewState({
+              type: VIEW_TYPE,
+              state: { file: file.path }
+            });
+          });
+        });
+      }
+    }));
+    this.addCommand({
+      id: "open-html-view",
+      name: "Open current file in HTML viewer",
+      checkCallback: (checking) => {
+        const f = this.app.workspace.getActiveFile();
+        if (f?.extension === "html") {
+          if (!checking) {
+            const leaf = this.app.workspace.getLeaf(true);
+            void leaf.setViewState({
+              type: VIEW_TYPE,
+              state: { file: f.path }
+            });
+          }
+          return true;
+        }
+        return false;
+      }
+    });
     this.registerEvent(this.app.workspace.on("layout-change", () => {
       this.views = this.views.filter((v) => !v.leaf.isDead());
     }));

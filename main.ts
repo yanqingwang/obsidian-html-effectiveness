@@ -188,6 +188,17 @@ class HEHTMLView extends ItemView {
 		return 'eye';
 	}
 
+	async setState(state: Record<string, unknown>): Promise<void> {
+		if (state?.file && typeof state.file === 'string') {
+			const file = this.app.vault.getFileByPath(state.file);
+			if (file) await this.setFile(file);
+		}
+	}
+
+	getState(): Record<string, unknown> {
+		return { file: this.file?.path };
+	}
+
 	async setFile(file: TFile): Promise<void> {
 		this.file = file;
 		await this.loadContent();
@@ -207,11 +218,6 @@ class HEHTMLView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
-		const state = this.leaf.getViewState();
-		if (state?.state?.file) {
-			const file = this.app.vault.getFileByPath(state.state.file);
-			if (file) await this.setFile(file);
-		}
 	}
 
 	async onClose(): Promise<void> {
@@ -233,6 +239,41 @@ export default class HEExtPlugin extends Plugin {
 			return view;
 		});
 		this.registerExtensions(['html'], VIEW_TYPE);
+
+		this.registerEvent(this.app.workspace.on('file-menu', (menu, file) => {
+			if (file instanceof TFile && file.extension === 'html') {
+				menu.addItem((item) => {
+					item.setTitle('Open with HTML Effectiveness')
+						.setIcon('eye')
+						.onClick(async () => {
+							const leaf = this.app.workspace.getLeaf(true);
+							await leaf.setViewState({
+								type: VIEW_TYPE,
+								state: { file: file.path }
+							});
+						});
+				});
+			}
+		}));
+
+		this.addCommand({
+			id: 'open-html-view',
+			name: 'Open current file in HTML viewer',
+			checkCallback: (checking) => {
+				const f = this.app.workspace.getActiveFile();
+				if (f?.extension === 'html') {
+					if (!checking) {
+						const leaf = this.app.workspace.getLeaf(true);
+						void leaf.setViewState({
+							type: VIEW_TYPE,
+							state: { file: f.path }
+						});
+					}
+					return true;
+				}
+				return false;
+			}
+		});
 
 		this.registerEvent(this.app.workspace.on('layout-change', () => {
 			this.views = this.views.filter(v => !v.leaf.isDead());
