@@ -1,4 +1,6 @@
-import { App, Plugin, PluginSettingTab, Setting, MarkdownPostProcessorContext, parseYaml, Notice } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, MarkdownPostProcessorContext, parseYaml, Notice, ItemView, WorkspaceLeaf, TFile } from 'obsidian';
+
+const VIEW_TYPE = 'html-effectiveness-view';
 
 interface HESettings {
 	defaultTheme: 'dark' | 'light';
@@ -6,11 +8,6 @@ interface HESettings {
 const DEFAULT_SETTINGS: HESettings = { defaultTheme: 'dark' };
 
 type TemplateType = 'compare' | 'timeline' | 'diagram' | 'report' | 'slides';
-
-interface TemplateMeta {
-	type: TemplateType;
-	theme?: 'dark' | 'light';
-}
 
 function escapeHtml(s: string): string {
 	return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -171,14 +168,62 @@ async function exportNoteAsHTML(app: App): Promise<void> {
 	new Notice('Exported: ' + path);
 }
 
+class HEHTMLView extends ItemView {
+	file: TFile | null = null;
+
+	constructor(leaf: WorkspaceLeaf) {
+		super(leaf);
+	}
+
+	getViewType(): string {
+		return VIEW_TYPE;
+	}
+
+	getDisplayText(): string {
+		return this.file ? this.file.basename : 'HTML Preview';
+	}
+
+	getIcon(): string {
+		return 'eye';
+	}
+
+	async loadFile(file: TFile): Promise<void> {
+		this.file = file;
+		const content = await this.app.vault.read(file);
+		const container = this.contentEl;
+		container.empty();
+		container.style.padding = '0';
+		container.style.height = '100%';
+		const iframe = container.createEl('iframe', {
+			attr: {
+				srcdoc: content,
+				style: 'width:100%;height:100%;border:none;'
+			}
+		});
+	}
+
+	async onOpen(): Promise<void> {
+		// content loaded via loadFile
+	}
+
+	async onClose(): Promise<void> {
+		// cleanup
+	}
+}
+
 export default class HEExtPlugin extends Plugin {
 	settings: HESettings = DEFAULT_SETTINGS;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+
+		this.registerView(VIEW_TYPE, (leaf) => new HEHTMLView(leaf));
+		this.registerExtensions(['html'], VIEW_TYPE);
+
 		this.registerMarkdownCodeBlockProcessor('html-effect', (src, el, ctx) => {
 			processor(src, el, ctx, this.settings.defaultTheme);
 		});
+
 		this.addCommand({ id: 'export-note', name: 'Export note as HTML', callback: () => exportNoteAsHTML(this.app) });
 		this.addCommand({ id: 'compare', name: 'Compare', editorCallback: (e) => e.replaceSelection('```html-effect\ncompare\n\nLeft\n---\nRight\n```') });
 		this.addCommand({ id: 'timeline', name: 'Timeline', editorCallback: (e) => e.replaceSelection('```html-effect\ntimeline\n\n- [2026-01] Event\n- [2026-06] Another\n```') });

@@ -29,6 +29,7 @@ __export(main_exports, {
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian = require("obsidian");
+var VIEW_TYPE = "html-effectiveness-view";
 var DEFAULT_SETTINGS = { defaultTheme: "dark" };
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -204,6 +205,39 @@ async function exportNoteAsHTML(app) {
   await app.vault.create(path, content);
   new import_obsidian.Notice("Exported: " + path);
 }
+var HEHTMLView = class extends import_obsidian.ItemView {
+  constructor(leaf) {
+    super(leaf);
+    this.file = null;
+  }
+  getViewType() {
+    return VIEW_TYPE;
+  }
+  getDisplayText() {
+    return this.file ? this.file.basename : "HTML Preview";
+  }
+  getIcon() {
+    return "eye";
+  }
+  async loadFile(file) {
+    this.file = file;
+    const content = await this.app.vault.read(file);
+    const container = this.contentEl;
+    container.empty();
+    container.style.padding = "0";
+    container.style.height = "100%";
+    const iframe = container.createEl("iframe", {
+      attr: {
+        srcdoc: content,
+        style: "width:100%;height:100%;border:none;"
+      }
+    });
+  }
+  async onOpen() {
+  }
+  async onClose() {
+  }
+};
 var HEExtPlugin = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
@@ -211,6 +245,8 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
   }
   async onload() {
     await this.loadSettings();
+    this.registerView(VIEW_TYPE, (leaf) => new HEHTMLView(leaf));
+    this.registerExtensions(["html"], VIEW_TYPE);
     this.registerMarkdownCodeBlockProcessor("html-effect", (src, el, ctx) => {
       processor(src, el, ctx, this.settings.defaultTheme);
     });
