@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, MarkdownPostProcessorContext, parseYaml, Notice, TFile } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, MarkdownPostProcessorContext, parseYaml, Notice } from 'obsidian';
 
 // ─── Settings ───────────────────────────────────────────────
 interface HESettings {
@@ -82,15 +82,17 @@ function renderSlides(container: HTMLElement, content: string, _meta: TemplateMe
 		const title = lines[0].replace(/^#\s*/, '');
 		const body = lines.slice(1).join('\n');
 		const sd = slidesWrap.createEl('div', { cls: 'he-slide', attr: { 'data-index': String(i) } });
-		if (i > 0) sd.style.display = 'none';
+		if (i > 0) sd.classList.add('he-slide-hidden');
 		sd.createEl('h2', { cls: 'he-slide-title', text: escapeHtml(title) });
 		const sb = sd.createEl('div', { cls: 'he-slide-body' });
-		sb.innerHTML = mdToHtml(body);
+		sb.insertAdjacentHTML('beforeend', mdToHtml(body));
 		slideDivs.push(sd);
 	});
 
 	const showSlide = (idx: number) => {
-		slideDivs.forEach((s, i) => { s.style.display = i === idx ? '' : 'none'; });
+		slideDivs.forEach((s, i) => {
+			s.classList.toggle('he-slide-hidden', i !== idx);
+		});
 		counter.textContent = `${idx + 1} / ${slideDivs.length}`;
 		currentIdx = idx;
 	};
@@ -138,25 +140,24 @@ function mdToHtml(md: string): string {
 }
 
 function processTemplate(container: HTMLElement, content: string, meta: TemplateMeta): void {
-	const safe = container.createDiv();
 	switch (meta.type) {
 		case 'compare':
-			safe.innerHTML = renderCompare(content, meta);
+			container.insertAdjacentHTML('beforeend', renderCompare(content, meta));
 			break;
 		case 'timeline':
-			safe.innerHTML = renderTimeline(content, meta);
+			container.insertAdjacentHTML('beforeend', renderTimeline(content, meta));
 			break;
 		case 'diagram':
-			safe.innerHTML = renderDiagram(content, meta);
+			container.insertAdjacentHTML('beforeend', renderDiagram(content, meta));
 			break;
 		case 'report':
-			safe.innerHTML = renderReport(content, meta);
+			container.insertAdjacentHTML('beforeend', renderReport(content, meta));
 			break;
 		case 'slides':
-			renderSlides(safe, content, meta);
+			renderSlides(container, content, meta);
 			break;
 		default:
-			safe.innerHTML = `<div class="he-error">Unknown template type: ${escapeHtml(meta.type)}</div>`;
+			container.insertAdjacentHTML('beforeend', `<div class="he-error">Unknown template type: ${escapeHtml(meta.type)}</div>`);
 	}
 }
 
@@ -172,10 +173,11 @@ function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorC
 			if (endIdx > 0) {
 				const yamlStr = source.substring(3, endIdx).trim();
 				try {
-					const parsed = parseYaml(yamlStr) as Partial<TemplateMeta>;
-					if (parsed && typeof parsed === 'object') {
-						meta = { ...meta, ...parsed };
-					}
+					const raw = parseYaml(yamlStr);
+					const parsed: Record<string, unknown> = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
+					const theme = parsed.theme === 'light' ? 'light' : 'dark';
+					const type = (typeof parsed.type === 'string' && ['compare','timeline','diagram','report','slides'].includes(parsed.type)) ? parsed.type as TemplateType : meta.type;
+					meta = { type, theme, ...parsed };
 				} catch { /* invalid YAML, use defaults */ }
 				content = source.substring(endIdx + 3).trim();
 			}
@@ -265,8 +267,8 @@ export default class HEExtPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'export-html-effectiveness',
-			name: 'Export note as HTML Effectiveness',
+			id: 'export-note',
+			name: 'Export note as HTML',
 			callback: () => exportNoteAsHTML(this.app),
 		});
 
@@ -314,7 +316,9 @@ export default class HEExtPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = await this.loadData();
+		const saved: Partial<HESettings> = (data && typeof data === 'object') ? data as Partial<HESettings> : {};
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
 	}
 
 	async saveSettings() {
@@ -333,7 +337,7 @@ class HESettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		containerEl.createEl('h2', { text: 'HTML Effectiveness Settings' });
+		new Setting(containerEl).setName('HTML Effectiveness').setHeading();
 		new Setting(containerEl)
 			.setName('Default theme')
 			.setDesc('Theme for rendered blocks')

@@ -46,6 +46,7 @@
 .he-slide-counter { font-size: 13px; color: var(--text-muted); min-width: 60px; text-align: center; }
 .he-slides { max-height: 500px; overflow-y: auto; scroll-behavior: smooth; }
 .he-slide { background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 8px; padding: 24px; margin-bottom: 8px; min-height: 200px; }
+.he-slide-hidden { display: none; }
 .he-slide-title { color: var(--text-accent); font-size: 20px; margin-bottom: 12px; }
 .he-slide-body { font-size: 14px; line-height: 1.7; }
 
