@@ -30,95 +30,6 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian = require("obsidian");
 var DEFAULT_SETTINGS = { defaultTheme: "dark" };
-function renderCompare(content, meta) {
-  const items = content.split("\n---\n").filter(Boolean);
-  const cols = items.map((item) => {
-    const lines = item.trim().split("\n");
-    const title = lines[0].replace(/^#\s*/, "");
-    const body = lines.slice(1).join("\n");
-    return `<div class="he-col"><div class="he-col-title">${escapeHtml(title)}</div><div class="he-col-body">${mdToHtml(body)}</div></div>`;
-  }).join("");
-  return `<div class="he-compare ${meta.theme || "dark"}">${cols}</div>`;
-}
-function renderTimeline(content, _meta) {
-  const items = content.trim().split("\n").filter((l) => l.trim());
-  const lis = items.map((line) => {
-    const match = line.match(/^-\s*\[(.+?)\]\s*(.+)/);
-    if (match) {
-      return `<li class="he-tl-item"><span class="he-tl-date">${escapeHtml(match[1])}</span><span class="he-tl-text">${escapeHtml(match[2])}</span></li>`;
-    }
-    return `<li class="he-tl-item"><span class="he-tl-text">${escapeHtml(line.replace(/^-\s*/, ""))}</span></li>`;
-  }).join("");
-  return `<ul class="he-timeline">${lis}</ul>`;
-}
-function renderDiagram(content, _meta) {
-  return `<div class="he-diagram"><pre class="he-diagram-pre">${escapeHtml(content)}</pre><p class="he-diagram-caption">Diagram \u2014 render as SVG in a future version</p></div>`;
-}
-function renderReport(content, meta) {
-  const lines = content.trim().split("\n").filter(Boolean);
-  let kpis = "";
-  let body = "";
-  let inKpi = false;
-  for (const line of lines) {
-    if (line.startsWith("## ")) {
-      inKpi = true;
-      continue;
-    }
-    if (line.startsWith("# ") && inKpi) {
-      inKpi = false;
-      body += `<h3 class="he-report-h3">${escapeHtml(line.replace(/^#\s*/, ""))}</h3>`;
-      continue;
-    }
-    if (inKpi) {
-      const m = line.match(/^-\s*(\d+[%MBT]?)\s*:\s*(.+)/);
-      if (m) {
-        kpis += `<div class="he-kpi"><div class="he-kpi-num">${escapeHtml(m[1])}</div><div class="he-kpi-label">${escapeHtml(m[2])}</div></div>`;
-        continue;
-      }
-    }
-    body += `<p>${mdToHtml(line)}</p>`;
-  }
-  const kpiHtml = kpis ? `<div class="he-kpi-row">${kpis}</div>` : "";
-  return `<div class="he-report ${meta.theme || "dark"}">${kpiHtml}<div class="he-report-body">${body}</div></div>`;
-}
-function renderSlides(container, content, _meta) {
-  const slides = content.split("\n---\n").filter(Boolean);
-  const slideDivs = [];
-  let currentIdx = 0;
-  const nav = container.createEl("div", { cls: "he-slides-nav" });
-  const prevBtn = nav.createEl("button", { text: "\u25C0", cls: "he-slide-btn" });
-  const counter = nav.createEl("span", { cls: "he-slide-counter" });
-  const nextBtn = nav.createEl("button", { text: "\u25B6", cls: "he-slide-btn" });
-  const slidesWrap = container.createEl("div", { cls: "he-slides" });
-  slides.forEach((slide, i) => {
-    const lines = slide.trim().split("\n");
-    const title = lines[0].replace(/^#\s*/, "");
-    const body = lines.slice(1).join("\n");
-    const sd = slidesWrap.createEl("div", { cls: "he-slide", attr: { "data-index": String(i) } });
-    if (i > 0)
-      sd.classList.add("he-slide-hidden");
-    sd.createEl("h2", { cls: "he-slide-title", text: escapeHtml(title) });
-    const sb = sd.createEl("div", { cls: "he-slide-body" });
-    sb.insertAdjacentHTML("beforeend", mdToHtml(body));
-    slideDivs.push(sd);
-  });
-  const showSlide = (idx) => {
-    slideDivs.forEach((s, i) => {
-      s.classList.toggle("he-slide-hidden", i !== idx);
-    });
-    counter.textContent = `${idx + 1} / ${slideDivs.length}`;
-    currentIdx = idx;
-  };
-  prevBtn.addEventListener("click", () => {
-    if (currentIdx > 0)
-      showSlide(currentIdx - 1);
-  });
-  nextBtn.addEventListener("click", () => {
-    if (currentIdx < slideDivs.length - 1)
-      showSlide(currentIdx + 1);
-  });
-  showSlide(0);
-}
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -142,29 +53,144 @@ function mdToHtml(md) {
   s = s.replace(/%%CODEBLOCK(\d+)%%/g, (_m, id) => blocks[parseInt(id)] || "");
   return s;
 }
+function htmlToFragment(html) {
+  return document.createRange().createContextualFragment(html);
+}
+function renderCompare(content, meta) {
+  const items = content.split("\n---\n").filter(Boolean);
+  const outer = document.createElement("div");
+  outer.className = "he-compare " + (meta.theme || "dark");
+  for (const item of items) {
+    const lines = item.trim().split("\n");
+    const title = lines[0].replace(/^#\s*/, "");
+    const body = lines.slice(1).join("\n");
+    const col = outer.createDiv({ cls: "he-col" });
+    col.createDiv({ cls: "he-col-title", text: escapeHtml(title) });
+    col.createDiv({ cls: "he-col-body" }).appendChild(htmlToFragment(mdToHtml(body)));
+  }
+  return htmlToFragment(outer.outerHTML);
+}
+function renderTimeline(content, _meta) {
+  const items = content.trim().split("\n").filter((l) => l.trim());
+  const ul = document.createElement("ul");
+  ul.className = "he-timeline";
+  for (const line of items) {
+    const li = document.createElement("li");
+    li.className = "he-tl-item";
+    const match = line.match(/^-\s*\[(.+?)\]\s*(.+)/);
+    if (match) {
+      const spanDate = document.createElement("span");
+      spanDate.className = "he-tl-date";
+      spanDate.textContent = escapeHtml(match[1]);
+      li.appendChild(spanDate);
+      const spanText = document.createElement("span");
+      spanText.className = "he-tl-text";
+      spanText.textContent = escapeHtml(match[2]);
+      li.appendChild(spanText);
+    } else {
+      li.textContent = escapeHtml(line.replace(/^-\s*/, ""));
+    }
+    ul.appendChild(li);
+  }
+  return htmlToFragment(ul.outerHTML);
+}
+function renderDiagram(content, _meta) {
+  const outer = document.createElement("div");
+  outer.className = "he-diagram";
+  const pre = outer.createEl("pre", { cls: "he-diagram-pre", text: escapeHtml(content) });
+  const cap = outer.createEl("p", { cls: "he-diagram-caption", text: "Diagram \u2014 render as SVG in a future version" });
+  return htmlToFragment(outer.outerHTML);
+}
+function renderReport(content, meta) {
+  const lines = content.trim().split("\n").filter(Boolean);
+  let kpis = "";
+  let body = "";
+  let inKpi = false;
+  for (const line of lines) {
+    if (line.startsWith("## ")) {
+      inKpi = true;
+      continue;
+    }
+    if (line.startsWith("# ") && inKpi) {
+      inKpi = false;
+      body += '<h3 class="he-report-h3">' + escapeHtml(line.replace(/^#\s*/, "")) + "</h3>";
+      continue;
+    }
+    if (inKpi) {
+      const m = line.match(/^-\s*(\d+[%MBT]?)\s*:\s*(.+)/);
+      if (m) {
+        kpis += '<div class="he-kpi"><div class="he-kpi-num">' + escapeHtml(m[1]) + '</div><div class="he-kpi-label">' + escapeHtml(m[2]) + "</div></div>";
+        continue;
+      }
+    }
+    body += "<p>" + mdToHtml(line) + "</p>";
+  }
+  const outer = document.createElement("div");
+  outer.className = "he-report " + (meta.theme || "dark");
+  if (kpis)
+    outer.insertAdjacentHTML("beforeend", '<div class="he-kpi-row">' + kpis + "</div>");
+  outer.insertAdjacentHTML("beforeend", '<div class="he-report-body">' + body + "</div>");
+  return htmlToFragment(outer.outerHTML);
+}
+function renderSlides(container, content, _meta) {
+  const slides = content.split("\n---\n").filter(Boolean);
+  const slideDivs = [];
+  let currentIdx = 0;
+  const nav = container.createDiv({ cls: "he-slides-nav" });
+  nav.createEl("button", { text: "\u25C0", cls: "he-slide-btn" }).addEventListener("click", () => {
+    if (currentIdx > 0)
+      showSlide(currentIdx - 1);
+  });
+  nav.createEl("span", { cls: "he-slide-counter" });
+  nav.createEl("button", { text: "\u25B6", cls: "he-slide-btn" }).addEventListener("click", () => {
+    if (currentIdx < slideDivs.length - 1)
+      showSlide(currentIdx + 1);
+  });
+  const slidesWrap = container.createDiv({ cls: "he-slides" });
+  function showSlide(idx) {
+    slideDivs.forEach((s, i) => s.classList.toggle("he-slide-hidden", i !== idx));
+    const counterEl = container.querySelector(".he-slide-counter");
+    if (counterEl)
+      counterEl.textContent = idx + 1 + " / " + slideDivs.length;
+    currentIdx = idx;
+  }
+  for (let i = 0; i < slides.length; i++) {
+    const lines = slides[i].trim().split("\n");
+    const title = lines[0].replace(/^#\s*/, "");
+    const body = lines.slice(1).join("\n");
+    const sd = slidesWrap.createDiv({ cls: "he-slide", attr: { "data-index": String(i) } });
+    if (i > 0)
+      sd.classList.add("he-slide-hidden");
+    sd.createEl("h2", { cls: "he-slide-title", text: escapeHtml(title) });
+    const sb = sd.createDiv({ cls: "he-slide-body" });
+    sb.appendChild(htmlToFragment(mdToHtml(body)));
+    slideDivs.push(sd);
+  }
+  showSlide(0);
+}
 function processTemplate(container, content, meta) {
   switch (meta.type) {
     case "compare":
-      container.insertAdjacentHTML("beforeend", renderCompare(content, meta));
+      container.appendChild(renderCompare(content, meta));
       break;
     case "timeline":
-      container.insertAdjacentHTML("beforeend", renderTimeline(content, meta));
+      container.appendChild(renderTimeline(content, meta));
       break;
     case "diagram":
-      container.insertAdjacentHTML("beforeend", renderDiagram(content, meta));
+      container.appendChild(renderDiagram(content, meta));
       break;
     case "report":
-      container.insertAdjacentHTML("beforeend", renderReport(content, meta));
+      container.appendChild(renderReport(content, meta));
       break;
     case "slides":
       renderSlides(container, content, meta);
       break;
     default:
-      container.insertAdjacentHTML("beforeend", `<div class="he-error">Unknown template type: ${escapeHtml(meta.type)}</div>`);
+      const err = container.createDiv({ cls: "he-error", text: "Unknown template type: " + meta.type });
   }
 }
 function processor(source, el, _ctx, defaultTheme = "dark") {
-  let meta = { type: "report", theme: defaultTheme };
+  let meta = { type: "report", theme: defaultTheme === "light" ? "light" : "dark" };
   let content = source;
   const firstNl = source.indexOf("\n");
   if (firstNl > 0) {
@@ -175,23 +201,27 @@ function processor(source, el, _ctx, defaultTheme = "dark") {
         const yamlStr = source.substring(3, endIdx).trim();
         try {
           const raw = (0, import_obsidian.parseYaml)(yamlStr);
-          const parsed = raw && typeof raw === "object" ? raw : {};
-          const theme = parsed.theme === "light" ? "light" : "dark";
-          const type = typeof parsed.type === "string" && ["compare", "timeline", "diagram", "report", "slides"].includes(parsed.type) ? parsed.type : meta.type;
-          meta = { type, theme, ...parsed };
+          if (raw && typeof raw === "object") {
+            const r = raw;
+            if (r.theme === "light")
+              meta.theme = "light";
+            if (r.type === "compare" || r.type === "timeline" || r.type === "diagram" || r.type === "report" || r.type === "slides") {
+              meta.type = r.type;
+            }
+          }
         } catch {
         }
         content = source.substring(endIdx + 3).trim();
       }
     } else {
-      const validTypes = ["compare", "timeline", "diagram", "report", "slides"];
-      if (validTypes.includes(firstLine.toLowerCase())) {
-        meta.type = firstLine.toLowerCase();
+      const t = firstLine.toLowerCase();
+      if (t === "compare" || t === "timeline" || t === "diagram" || t === "report" || t === "slides") {
+        meta.type = t;
         content = source.substring(firstNl + 1).trim();
       }
     }
   }
-  const wrapper = el.createEl("div", { cls: `he-wrapper ${meta.theme || "dark"}` });
+  const wrapper = el.createDiv({ cls: "he-wrapper " + (meta.theme || "dark") });
   processTemplate(wrapper, content, meta);
 }
 async function exportNoteAsHTML(app) {
@@ -201,60 +231,9 @@ async function exportNoteAsHTML(app) {
     return;
   }
   const content = await app.vault.read(file);
-  const html = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${file.basename} \u2014 HTML Effectiveness</title>
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; line-height: 1.6; }
-h1 { color: #58a6ff; font-size: 28px; margin-bottom: 16px; }
-h2 { color: #f0883e; font-size: 20px; margin: 30px 0 12px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
-h3 { color: #d2a8ff; font-size: 16px; margin: 20px 0 8px; }
-p { margin: 8px 0; }
-code { background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-pre { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; overflow: auto; }
-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-th, td { padding: 8px; border-bottom: 1px solid #30363d; text-align: left; }
-th { background: #161b22; color: #8b949e; }
-.he-wrapper { margin:12px 0; }
-.he-compare { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px; border-radius:8px; background:#161b22; border:1px solid #30363d; }
-.he-col { background:#0d1117; padding:12px; border-radius:6px; }
-.he-col-title { color:#f0883e; font-weight:600; font-size:15px; margin-bottom:8px; }
-.he-timeline { list-style:none; padding:0; position:relative; }
-.he-timeline::before { content:''; position:absolute; left:12px; top:0; bottom:0; width:2px; background:#30363d; }
-.he-tl-item { padding:8px 0 8px 32px; position:relative; }
-.he-tl-item::before { content:''; position:absolute; left:6px; top:14px; width:12px; height:12px; border-radius:50%; background:#58a6ff; }
-.he-tl-date { color:#f0883e; font-weight:600; margin-right:8px; }
-.he-kpi-row { display:flex; gap:12px; flex-wrap:wrap; margin:16px 0; }
-.he-kpi { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:14px 18px; text-align:center; flex:1; min-width:80px; }
-.he-kpi-num { font-size:24px; font-weight:700; color:#58a6ff; }
-.he-kpi-label { font-size:12px; color:#8b949e; }
-.he-slides-nav { display:flex; gap:12px; align-items:center; justify-content:center; margin-bottom:12px; }
-.he-slide-btn { background:#21262d; border:1px solid #30363d; color:#c9d1d9; padding:6px 16px; border-radius:6px; cursor:pointer; font-size:16px; }
-.he-slide-btn:hover { background:#30363d; }
-.he-slide-counter { font-size:13px; color:#8b949e; min-width:60px; text-align:center; }
-.he-slide { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:24px; margin-bottom:8px; min-height:200px; }
-.he-slide-title { color:#f0883e; font-size:20px; margin-bottom:12px; }
-.he-slide-body { font-size:14px; line-height:1.7; }
-.he-report { padding:16px; border-radius:8px; background:#161b22; border:1px solid #30363d; }
-.he-report-body { font-size:14px; line-height:1.7; }
-.he-report-h3 { font-size:16px; font-weight:600; color:#d2a8ff; margin:16px 0 8px; }
-.he-diagram { margin:12px 0; }
-.he-diagram-pre { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; overflow:auto; color:#c9d1d9; font-family:monospace; font-size:13px; line-height:1.5; }
-.he-diagram-caption { color:#8b949e; font-size:12px; text-align:center; margin-top:6px; }
-.he-error { color:#f85149; padding:12px; border:1px solid #f85149; border-radius:6px; }
-.he-inline-code { background:#21262d; padding:2px 6px; border-radius:4px; font-size:0.9em; }
-</style>
-</head>
-<body>
-<h1>${file.basename}</h1>
-${mdToHtml(content)}
-</body>
-</html>`;
-  const expPath = `${file.parent?.path || ""}/${file.basename}.html`;
-  await app.vault.create(expPath, html);
-  new import_obsidian.Notice(`Exported: ${expPath}`);
+  const expPath = (file.parent ? file.parent.path + "/" : "") + file.basename + ".html";
+  await app.vault.create(expPath, content);
+  new import_obsidian.Notice("Exported: " + expPath);
 }
 var HEExtPlugin = class extends import_obsidian.Plugin {
   constructor() {
@@ -266,52 +245,21 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
     this.registerMarkdownCodeBlockProcessor("html-effect", (source, el, ctx) => {
       processor(source, el, ctx, this.settings.defaultTheme);
     });
-    this.addCommand({
-      id: "export-note",
-      name: "Export note as HTML",
-      callback: () => exportNoteAsHTML(this.app)
-    });
-    this.addCommand({
-      id: "insert-compare",
-      name: "Insert Compare template",
-      editorCallback: (editor) => {
-        editor.replaceSelection("```html-effect\ncompare\n\nLeft column content\n---\nRight column content\n```");
-      }
-    });
-    this.addCommand({
-      id: "insert-timeline",
-      name: "Insert Timeline template",
-      editorCallback: (editor) => {
-        editor.replaceSelection("```html-effect\ntimeline\n\n- [2026-01] Event one\n- [2026-03] Event two\n- [2026-06] Event three\n```");
-      }
-    });
-    this.addCommand({
-      id: "insert-report",
-      name: "Insert Report template",
-      editorCallback: (editor) => {
-        editor.replaceSelection("```html-effect\n---\ntype: report\n---\n## \n- 85%: Completion rate\n- $2.5B: Market size\n- +32%: Growth YoY\n\n# Section Title\nReport content goes here...\n```");
-      }
-    });
-    this.addCommand({
-      id: "insert-slides",
-      name: "Insert Slides template",
-      editorCallback: (editor) => {
-        editor.replaceSelection("```html-effect\nslides\n\n# Slide 1\nContent for first slide\n---\n# Slide 2\nContent for second slide\n---\n# Slide 3\nContent for third slide\n```");
-      }
-    });
-    this.addCommand({
-      id: "insert-diagram",
-      name: "Insert Diagram template",
-      editorCallback: (editor) => {
-        editor.replaceSelection("```html-effect\ndiagram\n\n                    \u250C\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502 App \u2502\n                    \u2514\u2500\u2500\u252C\u2500\u2500\u2518\n                       \u2502\n              \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n              \u25BC        \u25BC        \u25BC\n           \u250C\u2500\u2500\u2500\u2500\u2510  \u250C\u2500\u2500\u2500\u2500\u2510  \u250C\u2500\u2500\u2500\u2500\u2510\n           \u2502 API\u2502  \u2502 DB \u2502  \u2502 UI \u2502\n           \u2514\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2518\n```");
-      }
-    });
+    this.addCommand({ id: "export-note", name: "Export note as HTML", callback: () => exportNoteAsHTML(this.app) });
+    this.addCommand({ id: "insert-compare", name: "Insert Compare template", editorCallback: (e) => e.replaceSelection("```html-effect\ncompare\n\nLeft column\n---\nRight column\n```") });
+    this.addCommand({ id: "insert-timeline", name: "Insert Timeline template", editorCallback: (e) => e.replaceSelection("```html-effect\ntimeline\n\n- [2026-01] Event one\n- [2026-03] Event two\n- [2026-06] Event three\n```") });
+    this.addCommand({ id: "insert-report", name: "Insert Report template", editorCallback: (e) => e.replaceSelection("```html-effect\n---\ntype: report\n---\n## \n- 85%: Rate\n- $2.5B: Value\n\n# Title\nContent...\n```") });
+    this.addCommand({ id: "insert-slides", name: "Insert Slides template", editorCallback: (e) => e.replaceSelection("```html-effect\nslides\n\n# Slide 1\nContent\n---\n# Slide 2\nContent\n```") });
+    this.addCommand({ id: "insert-diagram", name: "Insert Diagram template", editorCallback: (e) => e.replaceSelection("```html-effect\ndiagram\n\n\u250C\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 App \u2502\n\u2514\u2500\u252C\u2500\u2500\u2500\u2518\n  \u25BC\n\u250C\u2500\u2500\u2500\u2500\u2510\n\u2502 DB \u2502\n\u2514\u2500\u2500\u2500\u2500\u2518\n```") });
     this.addSettingTab(new HESettingTab(this.app, this));
   }
   async loadSettings() {
     const data = await this.loadData();
-    const saved = data && typeof data === "object" ? data : {};
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
+    if (data && typeof data === "object" && typeof data.defaultTheme === "string") {
+      const t = data.defaultTheme;
+      if (t === "light" || t === "dark")
+        this.settings.defaultTheme = t;
+    }
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -325,9 +273,9 @@ var HESettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian.Setting(containerEl).setName("HTML Effectiveness").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Default theme").setDesc("Theme for rendered blocks").addDropdown((dropdown) => dropdown.addOption("dark", "Dark").addOption("light", "Light").setValue(this.plugin.settings.defaultTheme).onChange(async (val) => {
-      this.plugin.settings.defaultTheme = val;
+    new import_obsidian.Setting(containerEl).setName("Settings").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Default theme").setDesc("Theme for rendered blocks").addDropdown((d) => d.addOption("dark", "Dark").addOption("light", "Light").setValue(this.plugin.settings.defaultTheme).onChange(async (v) => {
+      this.plugin.settings.defaultTheme = v;
       await this.plugin.saveSettings();
     }));
   }

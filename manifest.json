@@ -1,7 +1,7 @@
 {
 	"id": "html-effectiveness",
 	"name": "HTML Effectiveness",
-	"version": "1.0.6",
+	"version": "1.0.7",
 	"minAppVersion": "1.5.0",
 	"description": "Render spatial HTML — compare, timeline, diagram, report, slides. Based on html-effectiveness methodology.",
 	"author": "rosswang",
