@@ -230,18 +230,11 @@ var HEHTMLView = class extends import_obsidian.ItemView {
     const content = await this.app.vault.read(this.file);
     const container = this.contentEl;
     container.empty();
-    container.style.position = "absolute";
-    container.style.top = "0";
-    container.style.left = "0";
-    container.style.right = "0";
-    container.style.bottom = "0";
-    container.style.padding = "0";
-    container.style.margin = "0";
-    container.style.overflow = "hidden";
+    container.addClass("he-htmlview-container");
     this.iframe = document.createElement("iframe");
     this.iframe.setAttribute("sandbox", "allow-same-origin");
     this.iframe.setAttribute("srcdoc", content);
-    this.iframe.style.cssText = "width:100%;height:100%;border:none;display:block;";
+    this.iframe.className = "he-htmlview-iframe";
     container.appendChild(this.iframe);
   }
   async onOpen() {
@@ -278,7 +271,7 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
       if (file && file instanceof import_obsidian.TFile && file.extension === "html") {
         const leaf = this.app.workspace.getLeaf(false);
         if (leaf && leaf.view instanceof HEHTMLView) {
-          leaf.view.setFile(file);
+          void leaf.view.setFile(file);
         }
       }
     }));
@@ -286,7 +279,7 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
       if (file instanceof import_obsidian.TFile && file.extension === "html") {
         for (const view of this.views) {
           if (view.file?.path === file.path) {
-            view.setFile(file);
+            void view.setFile(file);
           }
         }
       }

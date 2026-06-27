@@ -198,18 +198,11 @@ class HEHTMLView extends ItemView {
 		const content = await this.app.vault.read(this.file);
 		const container = this.contentEl;
 		container.empty();
-		container.style.position = 'absolute';
-		container.style.top = '0';
-		container.style.left = '0';
-		container.style.right = '0';
-		container.style.bottom = '0';
-		container.style.padding = '0';
-		container.style.margin = '0';
-		container.style.overflow = 'hidden';
+		container.addClass('he-htmlview-container');
 		this.iframe = document.createElement('iframe');
 		this.iframe.setAttribute('sandbox', 'allow-same-origin');
 		this.iframe.setAttribute('srcdoc', content);
-		this.iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+		this.iframe.className = 'he-htmlview-iframe';
 		container.appendChild(this.iframe);
 	}
 
@@ -249,7 +242,7 @@ export default class HEExtPlugin extends Plugin {
 			if (file && file instanceof TFile && file.extension === 'html') {
 				const leaf = this.app.workspace.getLeaf(false);
 				if (leaf && leaf.view instanceof HEHTMLView) {
-					(leaf.view as HEHTMLView).setFile(file);
+					void (leaf.view as HEHTMLView).setFile(file);
 				}
 			}
 		}));
@@ -258,7 +251,7 @@ export default class HEExtPlugin extends Plugin {
 			if (file instanceof TFile && file.extension === 'html') {
 				for (const view of this.views) {
 					if (view.file?.path === file.path) {
-						view.setFile(file);
+						void view.setFile(file);
 					}
 				}
 			}
