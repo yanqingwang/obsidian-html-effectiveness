@@ -192,22 +192,29 @@ class HEHTMLView extends ItemView {
 		const content = await this.app.vault.read(file);
 		const container = this.contentEl;
 		container.empty();
+		container.style.position = 'absolute';
+		container.style.top = '0';
+		container.style.left = '0';
+		container.style.right = '0';
+		container.style.bottom = '0';
 		container.style.padding = '0';
-		container.style.height = '100%';
-		const iframe = container.createEl('iframe', {
-			attr: {
-				srcdoc: content,
-				style: 'width:100%;height:100%;border:none;'
-			}
-		});
+		container.style.margin = '0';
+		container.style.overflow = 'hidden';
+		const iframe = document.createElement('iframe');
+		iframe.setAttribute('sandbox', 'allow-same-origin');
+		iframe.setAttribute('srcdoc', content);
+		iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+		container.appendChild(iframe);
 	}
 
 	async onOpen(): Promise<void> {
-		// content loaded via loadFile
+		const file = this.app.workspace.getActiveFile();
+		if (file && file.extension === 'html') {
+			await this.loadFile(file);
+		}
 	}
 
 	async onClose(): Promise<void> {
-		// cleanup
 	}
 }
 
