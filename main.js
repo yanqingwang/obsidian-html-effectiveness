@@ -239,8 +239,18 @@ var HEHTMLView = class extends import_obsidian.ItemView {
       return;
     let content = await this.app.vault.read(this.file);
     const parentPath = this.file.parent ? this.file.parent.path : "";
-    const absBase = "file://" + this.app.vault.adapter.getBasePath() + "/" + parentPath;
-    content = content.replace("<head>", '<head>\n<base href="' + absBase + '/">\n');
+    content = content.replace(/(src|href)="([^"]+)"/g, (_match, attr, url) => {
+      if (url.startsWith("http") || url.startsWith("data") || url.startsWith("app://")) {
+        return _match;
+      }
+      const fullPath = parentPath ? parentPath + "/" + url : url;
+      try {
+        const resourceUrl = this.app.vault.adapter.getResourcePath(fullPath);
+        return attr + '="' + resourceUrl + '"';
+      } catch {
+        return _match;
+      }
+    });
     const container = this.contentEl;
     container.empty();
     container.addClass("he-htmlview-container");
