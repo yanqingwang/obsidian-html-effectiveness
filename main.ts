@@ -211,7 +211,7 @@ class HEHTMLView extends ItemView {
 		container.empty();
 		container.addClass('he-htmlview-container');
 		this.iframe = document.createElement('iframe');
-		this.iframe.setAttribute('sandbox', 'allow-same-origin');
+		this.iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts');
 		this.iframe.setAttribute('srcdoc', content);
 		this.iframe.className = 'he-htmlview-iframe';
 		container.appendChild(this.iframe);
