@@ -209,6 +209,7 @@ var HEHTMLView = class extends import_obsidian.ItemView {
   constructor(leaf) {
     super(leaf);
     this.file = null;
+    this.iframe = null;
   }
   getViewType() {
     return VIEW_TYPE;
@@ -219,9 +220,14 @@ var HEHTMLView = class extends import_obsidian.ItemView {
   getIcon() {
     return "eye";
   }
-  async loadFile(file) {
+  async setFile(file) {
     this.file = file;
-    const content = await this.app.vault.read(file);
+    await this.loadContent();
+  }
+  async loadContent() {
+    if (!this.file)
+      return;
+    const content = await this.app.vault.read(this.file);
     const container = this.contentEl;
     container.empty();
     container.style.position = "absolute";
@@ -232,30 +238,59 @@ var HEHTMLView = class extends import_obsidian.ItemView {
     container.style.padding = "0";
     container.style.margin = "0";
     container.style.overflow = "hidden";
-    const iframe = document.createElement("iframe");
-    iframe.setAttribute("sandbox", "allow-same-origin");
-    iframe.setAttribute("srcdoc", content);
-    iframe.style.cssText = "width:100%;height:100%;border:none;display:block;";
-    container.appendChild(iframe);
+    this.iframe = document.createElement("iframe");
+    this.iframe.setAttribute("sandbox", "allow-same-origin");
+    this.iframe.setAttribute("srcdoc", content);
+    this.iframe.style.cssText = "width:100%;height:100%;border:none;display:block;";
+    container.appendChild(this.iframe);
   }
   async onOpen() {
-    const file = this.app.workspace.getActiveFile();
-    if (file && file.extension === "html") {
-      await this.loadFile(file);
+    const state = this.leaf.getViewState();
+    if (state?.state?.file) {
+      const file = this.app.vault.getFileByPath(state.state.file);
+      if (file)
+        await this.setFile(file);
     }
   }
   async onClose() {
+    this.iframe = null;
+    this.file = null;
   }
 };
 var HEExtPlugin = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
+    this.views = [];
   }
   async onload() {
     await this.loadSettings();
-    this.registerView(VIEW_TYPE, (leaf) => new HEHTMLView(leaf));
+    this.registerView(VIEW_TYPE, (leaf) => {
+      const view = new HEHTMLView(leaf);
+      this.views.push(view);
+      return view;
+    });
     this.registerExtensions(["html"], VIEW_TYPE);
+    this.registerEvent(this.app.workspace.on("layout-change", () => {
+      this.views = this.views.filter((v) => !v.leaf.isDead());
+    }));
+    this.registerEvent(this.app.workspace.on("file-open", (file) => {
+      if (file && file instanceof import_obsidian.TFile && file.extension === "html") {
+        const leaf = this.app.workspace.getLeaf(false);
+        if (leaf && leaf.view instanceof HEHTMLView) {
+          leaf.view.setFile(file);
+        }
+      }
+    }));
+    this.registerEvent(this.app.vault.on("modify", (file) => {
+      if (file instanceof import_obsidian.TFile && file.extension === "html") {
+        for (const view of this.views) {
+          if (view.file?.path === file.path) {
+            view.setFile(file);
+          }
+        }
+      }
+    }));
     this.registerMarkdownCodeBlockProcessor("html-effect", (src, el, ctx) => {
       processor(src, el, ctx, this.settings.defaultTheme);
     });

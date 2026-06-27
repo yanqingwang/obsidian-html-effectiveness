@@ -170,6 +170,7 @@ async function exportNoteAsHTML(app: App): Promise<void> {
 
 class HEHTMLView extends ItemView {
 	file: TFile | null = null;
+	private iframe: HTMLIFrameElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf) {
 		super(leaf);
@@ -187,9 +188,14 @@ class HEHTMLView extends ItemView {
 		return 'eye';
 	}
 
-	async loadFile(file: TFile): Promise<void> {
+	async setFile(file: TFile): Promise<void> {
 		this.file = file;
-		const content = await this.app.vault.read(file);
+		await this.loadContent();
+	}
+
+	private async loadContent(): Promise<void> {
+		if (!this.file) return;
+		const content = await this.app.vault.read(this.file);
 		const container = this.contentEl;
 		container.empty();
 		container.style.position = 'absolute';
@@ -200,32 +206,63 @@ class HEHTMLView extends ItemView {
 		container.style.padding = '0';
 		container.style.margin = '0';
 		container.style.overflow = 'hidden';
-		const iframe = document.createElement('iframe');
-		iframe.setAttribute('sandbox', 'allow-same-origin');
-		iframe.setAttribute('srcdoc', content);
-		iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
-		container.appendChild(iframe);
+		this.iframe = document.createElement('iframe');
+		this.iframe.setAttribute('sandbox', 'allow-same-origin');
+		this.iframe.setAttribute('srcdoc', content);
+		this.iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+		container.appendChild(this.iframe);
 	}
 
 	async onOpen(): Promise<void> {
-		const file = this.app.workspace.getActiveFile();
-		if (file && file.extension === 'html') {
-			await this.loadFile(file);
+		const state = this.leaf.getViewState();
+		if (state?.state?.file) {
+			const file = this.app.vault.getFileByPath(state.state.file);
+			if (file) await this.setFile(file);
 		}
 	}
 
 	async onClose(): Promise<void> {
+		this.iframe = null;
+		this.file = null;
 	}
 }
 
 export default class HEExtPlugin extends Plugin {
 	settings: HESettings = DEFAULT_SETTINGS;
+	private views: HEHTMLView[] = [];
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
-		this.registerView(VIEW_TYPE, (leaf) => new HEHTMLView(leaf));
+		this.registerView(VIEW_TYPE, (leaf) => {
+			const view = new HEHTMLView(leaf);
+			this.views.push(view);
+			return view;
+		});
 		this.registerExtensions(['html'], VIEW_TYPE);
+
+		this.registerEvent(this.app.workspace.on('layout-change', () => {
+			this.views = this.views.filter(v => !v.leaf.isDead());
+		}));
+
+		this.registerEvent(this.app.workspace.on('file-open', (file) => {
+			if (file && file instanceof TFile && file.extension === 'html') {
+				const leaf = this.app.workspace.getLeaf(false);
+				if (leaf && leaf.view instanceof HEHTMLView) {
+					(leaf.view as HEHTMLView).setFile(file);
+				}
+			}
+		}));
+
+		this.registerEvent(this.app.vault.on('modify', (file) => {
+			if (file instanceof TFile && file.extension === 'html') {
+				for (const view of this.views) {
+					if (view.file?.path === file.path) {
+						view.setFile(file);
+					}
+				}
+			}
+		}));
 
 		this.registerMarkdownCodeBlockProcessor('html-effect', (src, el, ctx) => {
 			processor(src, el, ctx, this.settings.defaultTheme);
