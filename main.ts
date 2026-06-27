@@ -206,7 +206,10 @@ class HEHTMLView extends ItemView {
 
 	private async loadContent(): Promise<void> {
 		if (!this.file) return;
-		const content = await this.app.vault.read(this.file);
+		let content = await this.app.vault.read(this.file);
+		const parentPath = this.file.parent ? this.file.parent.path : '';
+		const absBase = 'file://' + this.app.vault.adapter.getBasePath() + '/' + parentPath;
+		content = content.replace('<head>', '<head>\n<base href="' + absBase + '/">\n');
 		const container = this.contentEl;
 		container.empty();
 		container.addClass('he-htmlview-container');
