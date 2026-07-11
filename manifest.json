@@ -1,6 +1,6 @@
 {
-	"id": "md-to-html-effect",
-	"name": "MD to HTML Effectiveness",
+	"id": "html-effectiveness",
+	"name": "HTML Effectiveness",
 	"version": "1.0.19",
 	"minAppVersion": "1.6.0",
 	"description": "Render spatial HTML in Obsidian — compare, timeline, diagram, report, slides. Export notes as standalone HTML with zoom controls. Based on html-effectiveness methodology.",
