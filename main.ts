@@ -927,6 +927,17 @@ class HEHTMLView extends ItemView {
 	}
 
 	async setFile(file: TFile): Promise<void> {
+		// Don't allow the same HTML file to open in multiple tabs
+		try {
+			const allViews: HEHTMLView[] = (this.app as any).plugins?.plugins?.['html-effectiveness']?.views || [];
+			for (const v of allViews) {
+				if (v !== this && v.file?.path === file.path && v.leaf.view !== null) {
+					this.app.workspace.setActiveLeaf(v.leaf, { focus: true });
+					try { (this.leaf as any).detach(); } catch {}
+					return;
+				}
+			}
+		} catch {}
 		this.file = file;
 		await this.loadContent();
 	}
@@ -981,7 +992,7 @@ class HEHTMLView extends ItemView {
 
 export default class HEExtPlugin extends Plugin {
 	settings: HESettings = DEFAULT_SETTINGS;
-	private views: HEHTMLView[] = [];
+	views: HEHTMLView[] = [];
 
 	async onload(): Promise<void> {
 		await this.loadSettings();

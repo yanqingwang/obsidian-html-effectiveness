@@ -867,6 +867,20 @@ var HEHTMLView = class extends import_obsidian.ItemView {
     return { file: this.file?.path };
   }
   async setFile(file) {
+    try {
+      const allViews = this.app.plugins?.plugins?.["html-effectiveness"]?.views || [];
+      for (const v of allViews) {
+        if (v !== this && v.file?.path === file.path && v.leaf.view !== null) {
+          this.app.workspace.setActiveLeaf(v.leaf, { focus: true });
+          try {
+            this.leaf.detach();
+          } catch {
+          }
+          return;
+        }
+      }
+    } catch {
+    }
     this.file = file;
     await this.loadContent();
   }
