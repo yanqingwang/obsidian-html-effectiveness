@@ -993,12 +993,24 @@ export default class HEExtPlugin extends Plugin {
 		});
 		this.registerExtensions(['html'], VIEW_TYPE);
 
+		// Helper: reveal existing view for the same file if one exists; return true if found
+		const revealExisting = (filePath: string): boolean => {
+			for (const v of this.views) {
+				if (v.file?.path === filePath && v.leaf.view !== null) {
+					this.app.workspace.setActiveLeaf(v.leaf, { focus: true });
+					return true;
+				}
+			}
+			return false;
+		};
+
 		this.registerEvent(this.app.workspace.on('file-menu', (menu, file) => {
 			if (file instanceof TFile && file.extension === 'html') {
 				menu.addItem((item) => {
 					item.setTitle('Open with HTML Effectiveness')
 						.setIcon('eye')
 						.onClick(async () => {
+							if (revealExisting(file.path)) return;
 							const leaf = this.app.workspace.getLeaf(true);
 							await leaf.setViewState({
 								type: VIEW_TYPE,
@@ -1016,6 +1028,7 @@ export default class HEExtPlugin extends Plugin {
 				const f = this.app.workspace.getActiveFile();
 				if (f?.extension === 'html') {
 					if (!checking) {
+						if (revealExisting(f.path)) return true;
 						const leaf = this.app.workspace.getLeaf(true);
 						void leaf.setViewState({
 							type: VIEW_TYPE,
