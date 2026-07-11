@@ -129,12 +129,12 @@ function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorC
 			if (end > 0) {
 				const yml = source.substring(3, end).trim();
 				try {
-					const r = parseYaml(yml);
-					if (r && typeof r === 'object') {
-						const o = r as Record<string, unknown>;
+					const parsed: Record<string, unknown> | null = parseYaml(yml) as Record<string, unknown> | null;
+					if (parsed && typeof parsed === 'object') {
+						const o = parsed as Record<string, unknown>;
 						if (o.theme === 'light') theme = 'light';
 						if (typeof o.type === 'string') {
-							const t = o.type as string;
+							const t: string = o.type;
 							if (t === 'compare' || t === 'timeline' || t === 'diagram' || t === 'report' || t === 'slides') type = t;
 						}
 					}
@@ -208,13 +208,13 @@ class HEHTMLView extends ItemView {
 		if (!this.file) return;
 		let content = await this.app.vault.read(this.file);
 		const parentPath = this.file.parent ? this.file.parent.path : '';
-		content = content.replace(/(src|href)="([^"]+)"/g, (_match, attr, url) => {
+		content = content.replace(/(src|href)="([^"]+)"/g, (_match: string, attr: string, url: string): string => {
 			if (url.startsWith('http') || url.startsWith('data') || url.startsWith('app://')) {
 				return _match;
 			}
-			const fullPath = parentPath ? parentPath + '/' + url : url;
+			const fullPath: string = parentPath ? parentPath + '/' + url : url;
 			try {
-				const resourceUrl = this.app.vault.adapter.getResourcePath(fullPath);
+				const resourceUrl: string = this.app.vault.adapter.getResourcePath(fullPath) as string;
 				return attr + '="' + resourceUrl + '"';
 			} catch {
 				return _match;
@@ -225,7 +225,7 @@ class HEHTMLView extends ItemView {
 		if (!content.includes('zoom-bar')) {
 			const zoomHtml = `<style>.zoom-container{transform-origin:top left}.zoom-bar{position:fixed;bottom:24px;right:24px;display:flex;align-items:center;gap:4px;padding:4px 8px;background:#fff;border:1px solid #d1cfc5;border-radius:12px;box-shadow:0 4px 10px rgba(20,20,19,.08);z-index:999;user-select:none;opacity:.7;transition:opacity .2s}.zoom-bar:hover{opacity:1}.zoom-btn{display:grid;place-items:center;width:28px;height:28px;border:none;background:0 0;border-radius:4px;cursor:pointer;font-size:16px;color:#141413;transition:background .1s;line-height:1}.zoom-btn:hover{background:#f0eee6}.zoom-level{min-width:40px;text-align:center;font-family:ui-monospace,monospace;font-size:12px;color:#87867f}</style>
 <script>(function(){var KEY='he-zoom',zoom=parseFloat(localStorage.getItem(KEY))||1,MIN=.3,MAX=3,STEP=.1;function apply(){var c=document.querySelector('.zoom-container');if(!c)return;c.style.transform='scale('+zoom+')';c.style.transformOrigin='top left';c.style.width=(100/zoom)+'%';var el=document.querySelector('.zoom-level');if(el)el.textContent=Math.round(zoom*100)+'%';try{localStorage.setItem(KEY,zoom)}catch(e){}}if(!document.querySelector('.zoom-bar')){var w=document.createElement('div');w.className='zoom-container';while(document.body.firstChild)w.appendChild(document.body.firstChild);document.body.appendChild(w);var b=document.createElement('div');b.className='zoom-bar';b.innerHTML='<button class="zoom-btn" id="zo">\u2212</button><span class="zoom-level">'+Math.round(zoom*100)+'%</span><button class="zoom-btn" id="zi">+</button><button class="zoom-btn" id="zr">\u27F2</button>';document.body.appendChild(b);document.getElementById('zi').onclick=function(){zoom=Math.min(MAX,zoom+STEP);apply()};document.getElementById('zo').onclick=function(){zoom=Math.max(MIN,zoom-STEP);apply()};document.getElementById('zr').onclick=function(){zoom=1;apply()};document.addEventListener('wheel',function(e){if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoom=Math.max(MIN,Math.min(MAX,zoom-e.deltaY*.002));apply()},{passive:false});document.addEventListener('keydown',function(e){if(!e.ctrlKey&&!e.metaKey)return;if(e.key==='='||e.key==='+'){e.preventDefault();zoom=Math.min(MAX,zoom+STEP);apply()}else if(e.key==='-'){e.preventDefault();zoom=Math.max(MIN,zoom-STEP);apply()}else if(e.key==='0'){e.preventDefault();zoom=1;apply()}});apply()}})();
-<\/script>`;
+</script>`;
 			const bodyEnd = content.lastIndexOf('</body>');
 			if (bodyEnd >= 0) {
 				content = content.slice(0, bodyEnd) + zoomHtml + content.slice(bodyEnd);
@@ -236,7 +236,7 @@ class HEHTMLView extends ItemView {
 		const container = this.contentEl;
 		container.empty();
 		container.addClass('he-htmlview-container');
-		this.iframe = document.createElement('iframe');
+		this.iframe = container.ownerDocument.createElement('iframe');
 		this.iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts');
 		this.iframe.setAttribute('srcdoc', content);
 		this.iframe.className = 'he-htmlview-iframe';
@@ -309,7 +309,7 @@ export default class HEExtPlugin extends Plugin {
 			if (file && file instanceof TFile && file.extension === 'html') {
 				const leaf = this.app.workspace.getLeaf(false);
 				if (leaf && leaf.view instanceof HEHTMLView) {
-					void (leaf.view as HEHTMLView).setFile(file);
+					void leaf.view.setFile(file);
 				}
 			}
 		}));
@@ -338,10 +338,9 @@ export default class HEExtPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const data = await this.loadData();
-		if (data && typeof data === 'object') {
-			const o = data as Record<string, unknown>;
-			if (o.defaultTheme === 'light') this.settings.defaultTheme = 'light';
+		const data: Record<string, unknown> | null = await this.loadData() as Record<string, unknown> | null;
+		if (data) {
+			if (data.defaultTheme === 'light') this.settings.defaultTheme = 'light';
 		}
 	}
 

@@ -152,9 +152,9 @@ function processor(source, el, _ctx, defaultTheme) {
       if (end > 0) {
         const yml = source.substring(3, end).trim();
         try {
-          const r = (0, import_obsidian.parseYaml)(yml);
-          if (r && typeof r === "object") {
-            const o = r;
+          const parsed = (0, import_obsidian.parseYaml)(yml);
+          if (parsed && typeof parsed === "object") {
+            const o = parsed;
             if (o.theme === "light")
               theme = "light";
             if (typeof o.type === "string") {
@@ -265,7 +265,7 @@ var HEHTMLView = class extends import_obsidian.ItemView {
     const container = this.contentEl;
     container.empty();
     container.addClass("he-htmlview-container");
-    this.iframe = document.createElement("iframe");
+    this.iframe = container.ownerDocument.createElement("iframe");
     this.iframe.setAttribute("sandbox", "allow-same-origin allow-scripts");
     this.iframe.setAttribute("srcdoc", content);
     this.iframe.className = "he-htmlview-iframe";
@@ -356,9 +356,8 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
   }
   async loadSettings() {
     const data = await this.loadData();
-    if (data && typeof data === "object") {
-      const o = data;
-      if (o.defaultTheme === "light")
+    if (data) {
+      if (data.defaultTheme === "light")
         this.settings.defaultTheme = "light";
     }
   }
