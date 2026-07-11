@@ -461,68 +461,100 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 	const svgH = Math.max(...nodes.map(n => n.y + NODE_H + PAD), 100);
 
 	// ---- Build SVG ----
-	const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+	const NS = 'http://www.w3.org/2000/svg';
+	const svg = document.createElementNS(NS, 'svg') as unknown as SVGSVGElement;
+	svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+	svg.setAttribute('style', 'width:100%;height:auto;display:block');
 
-	let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">
-<defs>
-  <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-    <path d="M 0 0 L 10 5 L 0 10 z" fill="#141413"/>
-  </marker>
-</defs>
-`;
+	const defs = document.createElementNS(NS, 'defs');
+	const marker = document.createElementNS(NS, 'marker');
+	marker.setAttribute('id', 'arr');
+	marker.setAttribute('viewBox', '0 0 10 10');
+	marker.setAttribute('refX', '9');
+	marker.setAttribute('refY', '5');
+	marker.setAttribute('markerWidth', '6');
+	marker.setAttribute('markerHeight', '6');
+	marker.setAttribute('orient', 'auto-start-reverse');
+	const mpath = document.createElementNS(NS, 'path');
+	mpath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+	mpath.setAttribute('fill', '#141413');
+	marker.appendChild(mpath);
+	defs.appendChild(marker);
+	svg.appendChild(defs);
 
-	// Horizontal edges: consecutive nodes in the same row
+	function addPath(d: string, cls = 'edge') {
+		const el = document.createElementNS(NS, 'path');
+		el.setAttribute('d', d);
+		el.setAttribute('class', cls);
+		el.setAttribute('marker-end', 'url(#arr)');
+		svg.appendChild(el);
+	}
+
+	// Edges
 	for (const n of nodes) {
 		const next = nodes.find(o => o.row === n.row && o.col === n.col + 1);
-		if (!next) continue;
-		svg += `<path class="edge" d="M ${n.x + n.w} ${n.y + NODE_H / 2} L ${next.x} ${next.y + NODE_H / 2}" marker-end="url(#arr)"/>\n`;
-	}
-
-	// Vertical edges: same column between adjacent rows
-	for (const n of nodes) {
+		if (next) {
+			addPath(`M ${n.x + n.w} ${n.y + NODE_H / 2} L ${next.x} ${next.y + NODE_H / 2}`);
+		}
 		const below = nodes.find(o => o.row === n.row + 1 && o.col === n.col);
-		if (!below) continue;
-		const x1 = n.x + n.w / 2;
-		const y1 = n.y + NODE_H;
-		const x2 = below.x + below.w / 2;
-		const y2 = below.y;
-		if (Math.abs(x1 - x2) > 2) {
-			// Step path when columns are offset
-			const my = (y1 + y2) / 2;
-			svg += `<path class="edge" d="M ${x1} ${y1} L ${x1} ${my} L ${x2} ${my} L ${x2} ${y2}" marker-end="url(#arr)"/>\n`;
-		} else {
-			svg += `<path class="edge" d="M ${x1} ${y1} L ${x2} ${y2}" marker-end="url(#arr)"/>\n`;
+		if (below) {
+			const x1 = n.x + n.w / 2, y1 = n.y + NODE_H;
+			const x2 = below.x + below.w / 2, y2 = below.y;
+			if (Math.abs(x1 - x2) > 2) {
+				const my = (y1 + y2) / 2;
+				addPath(`M ${x1} ${y1} L ${x1} ${my} L ${x2} ${my} L ${x2} ${y2}`);
+			} else {
+				addPath(`M ${x1} ${y1} L ${x2} ${y2}`);
+			}
 		}
 	}
 
-	// Render each node shape + label
+	// Nodes
 	for (const n of nodes) {
-		const cx = n.x + n.w / 2;
-		const cy = n.y + NODE_H / 2;
-		const label = esc(n.text);
-
+		const cx = n.x + n.w / 2, cy = n.y + NODE_H / 2;
+		const label = n.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+		let shape: SVGElement;
 		switch (n.type) {
 			case 'process':
-				svg += `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${NODE_H}" rx="8" class="node-bg"/>\n`;
+				shape = document.createElementNS(NS, 'rect');
+				shape.setAttribute('x', String(n.x));
+				shape.setAttribute('y', String(n.y));
+				shape.setAttribute('width', String(n.w));
+				shape.setAttribute('height', String(NODE_H));
+				shape.setAttribute('rx', '8');
 				break;
 			case 'terminal':
-				svg += `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${NODE_H}" rx="${NODE_H / 2}" class="node-bg"/>\n`;
+				shape = document.createElementNS(NS, 'rect');
+				shape.setAttribute('x', String(n.x));
+				shape.setAttribute('y', String(n.y));
+				shape.setAttribute('width', String(n.w));
+				shape.setAttribute('height', String(NODE_H));
+				shape.setAttribute('rx', String(NODE_H / 2));
 				break;
 			case 'decision':
-				svg += `<polygon points="${cx},${n.y} ${n.x + n.w},${cy} ${cx},${n.y + NODE_H} ${n.x},${cy}" class="node-bg"/>\n`;
+				shape = document.createElementNS(NS, 'polygon');
+				shape.setAttribute('points', `${cx},${n.y} ${n.x + n.w},${cy} ${cx},${n.y + NODE_H} ${n.x},${cy}`);
 				break;
 		}
-		svg += `<text x="${cx}" y="${cy}" class="node-label" text-anchor="middle" dominant-baseline="central">${label}</text>\n`;
+		shape.setAttribute('class', 'node-bg');
+		svg.appendChild(shape);
+		const text = document.createElementNS(NS, 'text');
+		text.setAttribute('x', String(cx));
+		text.setAttribute('y', String(cy));
+		text.setAttribute('class', 'node-label');
+		text.setAttribute('text-anchor', 'middle');
+		text.setAttribute('dominant-baseline', 'central');
+		text.textContent = label;
+		svg.appendChild(text);
 	}
 
-	svg += `</svg>`;
-	d.insertAdjacentHTML('afterbegin', svg);
+	d.insertBefore(svg, d.firstChild);
 
 	// ---- Legend ----
 	const leg = d.createDiv({ cls: 'he-diagram-caption' });
 	function legItem(shape: string, label: string) {
 		const span = leg.createSpan({ attr: { style: 'display:inline-flex;align-items:center;gap:4px;margin:0 8px;' } });
-		const swatch = span.createSpan({ attr: { style: 'display:inline-block;border:1.5px solid var(--he-gray-500,#87867F);background:var(--he-gray-100,#F0EEE6);vertical-align:middle;' + shape } });
+		span.createSpan({ attr: { style: 'display:inline-block;border:1.5px solid var(--he-gray-500,#87867F);background:var(--he-gray-100,#F0EEE6);vertical-align:middle;' + shape } });
 		span.appendText(' ' + label);
 	}
 	legItem('width:20px;height:8px;border-radius:3px;', 'process');
