@@ -1,9 +1,9 @@
 {
 	"id": "html-effectiveness",
 	"name": "HTML Effectiveness",
-	"version": "1.0.16",
+	"version": "1.0.17",
 	"minAppVersion": "1.6.0",
-	"description": "Render spatial HTML — compare, timeline, diagram, report, slides. Based on html-effectiveness methodology.",
+	"description": "Render spatial HTML — compare, timeline, diagram, report, slides. Zoom controls in HTML viewer. Based on html-effectiveness methodology.",
 	"author": "rosswang",
 	"authorUrl": "https://github.com/yanqingwang",
 	"isDesktopOnly": false

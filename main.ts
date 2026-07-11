@@ -220,6 +220,19 @@ class HEHTMLView extends ItemView {
 				return _match;
 			}
 		});
+
+		// inject zoom controls (skip if content already has them, e.g. html-effectiveness generated)
+		if (!content.includes('zoom-bar')) {
+			const zoomHtml = `<style>.zoom-container{transform-origin:top left}.zoom-bar{position:fixed;bottom:24px;right:24px;display:flex;align-items:center;gap:4px;padding:4px 8px;background:#fff;border:1px solid #d1cfc5;border-radius:12px;box-shadow:0 4px 10px rgba(20,20,19,.08);z-index:999;user-select:none;opacity:.7;transition:opacity .2s}.zoom-bar:hover{opacity:1}.zoom-btn{display:grid;place-items:center;width:28px;height:28px;border:none;background:0 0;border-radius:4px;cursor:pointer;font-size:16px;color:#141413;transition:background .1s;line-height:1}.zoom-btn:hover{background:#f0eee6}.zoom-level{min-width:40px;text-align:center;font-family:ui-monospace,monospace;font-size:12px;color:#87867f}</style>
+<script>(function(){var KEY='he-zoom',zoom=parseFloat(localStorage.getItem(KEY))||1,MIN=.3,MAX=3,STEP=.1;function apply(){var c=document.querySelector('.zoom-container');if(!c)return;c.style.transform='scale('+zoom+')';c.style.transformOrigin='top left';c.style.width=(100/zoom)+'%';var el=document.querySelector('.zoom-level');if(el)el.textContent=Math.round(zoom*100)+'%';try{localStorage.setItem(KEY,zoom)}catch(e){}}if(!document.querySelector('.zoom-bar')){var w=document.createElement('div');w.className='zoom-container';while(document.body.firstChild)w.appendChild(document.body.firstChild);document.body.appendChild(w);var b=document.createElement('div');b.className='zoom-bar';b.innerHTML='<button class="zoom-btn" id="zo">\u2212</button><span class="zoom-level">'+Math.round(zoom*100)+'%</span><button class="zoom-btn" id="zi">+</button><button class="zoom-btn" id="zr">\u27F2</button>';document.body.appendChild(b);document.getElementById('zi').onclick=function(){zoom=Math.min(MAX,zoom+STEP);apply()};document.getElementById('zo').onclick=function(){zoom=Math.max(MIN,zoom-STEP);apply()};document.getElementById('zr').onclick=function(){zoom=1;apply()};document.addEventListener('wheel',function(e){if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoom=Math.max(MIN,Math.min(MAX,zoom-e.deltaY*.002));apply()},{passive:false});document.addEventListener('keydown',function(e){if(!e.ctrlKey&&!e.metaKey)return;if(e.key==='='||e.key==='+'){e.preventDefault();zoom=Math.min(MAX,zoom+STEP);apply()}else if(e.key==='-'){e.preventDefault();zoom=Math.max(MIN,zoom-STEP);apply()}else if(e.key==='0'){e.preventDefault();zoom=1;apply()}});apply()}})();
+<\/script>`;
+			const bodyEnd = content.lastIndexOf('</body>');
+			if (bodyEnd >= 0) {
+				content = content.slice(0, bodyEnd) + zoomHtml + content.slice(bodyEnd);
+			} else {
+				content += zoomHtml;
+			}
+		}
 		const container = this.contentEl;
 		container.empty();
 		container.addClass('he-htmlview-container');
@@ -289,7 +302,7 @@ export default class HEExtPlugin extends Plugin {
 		});
 
 		this.registerEvent(this.app.workspace.on('layout-change', () => {
-			this.views = this.views.filter(v => !v.leaf.isDead());
+			this.views = this.views.filter(v => v.leaf.view !== null);
 		}));
 
 		this.registerEvent(this.app.workspace.on('file-open', (file) => {
