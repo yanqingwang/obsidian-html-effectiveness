@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, MarkdownPostProcessorContext, parseYaml, Notice, ItemView, WorkspaceLeaf, TFile } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, MarkdownPostProcessorContext, parseYaml, Notice, ItemView, WorkspaceLeaf, TFile, MarkdownRenderer, Component } from 'obsidian';
 
 const VIEW_TYPE = 'html-effectiveness-view';
 
@@ -14,23 +14,334 @@ function escapeHtml(s: string): string {
 }
 
 function applyMd(parent: HTMLElement, text: string): void {
-	const parts = escapeHtml(text).split(/\n/g);
-	for (let i = 0; i < parts.length; i++) {
-		if (i > 0) parent.createEl('br');
-		if (parts[i]) parent.createSpan({ text: parts[i] });
+	const lines = text.split('\n');
+	let i = 0;
+
+	while (i < lines.length) {
+		const line = lines[i];
+
+		// Code block (triple backtick)
+		if (line.trimStart().startsWith('```')) {
+			const lang = line.trimStart().slice(3).trim();
+			const codeLines: string[] = [];
+			i++;
+			while (i < lines.length && !lines[i].trimStart().startsWith('```')) {
+				codeLines.push(lines[i]);
+				i++;
+			}
+			i++; // skip closing ```
+			const pre = parent.createEl('pre');
+			const code = pre.createEl('code');
+			if (lang) code.addClass('language-' + lang);
+			code.textContent = codeLines.join('\n');
+			continue;
+		}
+
+		// Blockquote
+		if (line.trimStart().startsWith('> ')) {
+			const bq = parent.createEl('blockquote');
+			const quoteLines: string[] = [];
+			while (i < lines.length && lines[i].trimStart().startsWith('> ')) {
+				quoteLines.push(lines[i].trimStart().slice(2));
+				i++;
+			}
+			applyInline(bq, quoteLines.join('\n'));
+			continue;
+		}
+
+		// Unordered list
+		if (line.trimStart().match(/^[-*]\s/)) {
+			const ul = parent.createEl('ul');
+			while (i < lines.length && lines[i].trimStart().match(/^[-*]\s/)) {
+				const li = ul.createEl('li');
+				applyInline(li, lines[i].trimStart().slice(2));
+				i++;
+			}
+			continue;
+		}
+
+		// Ordered list
+		if (line.trimStart().match(/^\d+\.\s/)) {
+			const ol = parent.createEl('ol');
+			while (i < lines.length && lines[i].trimStart().match(/^\d+\.\s/)) {
+				const li = ol.createEl('li');
+				applyInline(li, lines[i].trimStart().replace(/^\d+\.\s*/, ''));
+				i++;
+			}
+			continue;
+		}
+
+		// Heading
+		const headingMatch = line.match(/^(#{1,6})\s+(.+)/);
+		if (headingMatch) {
+			const level = Math.min(headingMatch[1].length, 6) as 1 | 2 | 3 | 4 | 5 | 6;
+			const h = parent.createEl('h' + level as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6');
+			applyInline(h, headingMatch[2]);
+			i++;
+			continue;
+		}
+
+		// Horizontal rule
+		if (line.match(/^---+\s*$/)) {
+			parent.createEl('hr');
+			i++;
+			continue;
+		}
+
+		// Empty line = paragraph break
+		if (line.trim() === '') {
+			i++;
+			continue;
+		}
+
+		// Regular paragraph
+		const p = parent.createEl('p');
+		applyInline(p, line);
+		i++;
+	}
+}
+
+function applyInline(parent: HTMLElement, text: string): void {
+	// Escape HTML entities first
+	const escaped = text
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
+
+	// Parse inline markdown patterns by splitting into tokens
+	const parts: Array<{ type: string; content: string }> = [];
+	let lastIndex = 0;
+	let match: RegExpExecArray | null;
+	const regex = /(\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|`[^`]+`|~~[^~]+~~|!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\))/g;
+
+	while ((match = regex.exec(escaped)) !== null) {
+		// Text before this match
+		if (match.index > lastIndex) {
+			parts.push({ type: 'text', content: escaped.slice(lastIndex, match.index) });
+		}
+
+		const full = match[0];
+		if (full.startsWith('**') || full.startsWith('__')) {
+			parts.push({ type: 'bold', content: full.slice(2, -2) });
+		} else if (full.startsWith('*') && !full.startsWith('**')) {
+			parts.push({ type: 'italic', content: full.slice(1, -1) });
+		} else if (full.startsWith('_') && !full.startsWith('__')) {
+			parts.push({ type: 'italic', content: full.slice(1, -1) });
+		} else if (full.startsWith('`')) {
+			parts.push({ type: 'code', content: full.slice(1, -1) });
+		} else if (full.startsWith('~~')) {
+			parts.push({ type: 'del', content: full.slice(2, -2) });
+		} else if (full.startsWith('![')) {
+			const alt = match[2] || '';
+			const src = match[3] || '';
+			parts.push({ type: 'image', content: JSON.stringify({ alt, src }) });
+		} else if (full.startsWith('[')) {
+			const linkText = match[4] || full.slice(1, full.indexOf(']'));
+			const url = match[5] || '';
+			parts.push({ type: 'link', content: JSON.stringify({ text: linkText, url }) });
+		}
+
+		lastIndex = match.index + full.length;
+	}
+
+	// Remaining text
+	if (lastIndex < escaped.length) {
+		parts.push({ type: 'text', content: escaped.slice(lastIndex) });
+	}
+
+	// If no matches, just set text content
+	if (parts.length === 0) {
+		parent.appendChild(document.createTextNode(escaped));
+		return;
+	}
+
+	// Render parts
+	for (const part of parts) {
+		switch (part.type) {
+			case 'text':
+				parent.appendChild(document.createTextNode(part.content));
+				break;
+			case 'bold':
+				parent.createEl('strong', { text: part.content });
+				break;
+			case 'italic':
+				parent.createEl('em', { text: part.content });
+				break;
+			case 'code':
+				parent.createEl('code', { cls: 'he-inline-code', text: part.content });
+				break;
+			case 'del':
+				parent.createEl('del', { text: part.content });
+				break;
+			case 'link': {
+				const data = JSON.parse(part.content);
+				parent.createEl('a', { text: data.text, href: data.url });
+				break;
+			}
+			case 'image': {
+				const data = JSON.parse(part.content);
+				parent.createEl('img', { attr: { src: data.src, alt: data.alt } });
+				break;
+			}
+		}
 	}
 }
 
 function buildCompare(parent: HTMLElement, content: string, theme: string): void {
 	const outer = parent.createDiv({ cls: 'he-compare ' + theme });
-	const items = content.split('\n---\n').filter(Boolean);
-	for (const item of items) {
-		const lines = item.trim().split('\n');
-		const title = lines.shift()?.replace(/^#\s*/, '') || '';
-		const col = outer.createDiv({ cls: 'he-col' });
-		col.createDiv({ cls: 'he-col-title', text: escapeHtml(title) });
-		const body = col.createDiv({ cls: 'he-col-body' });
-		applyMd(body, lines.join('\n'));
+
+	// ── step 1: parse columns from content ──
+	interface Col {
+		tag: string;
+		title: string;
+		codeBlock: { lang: string; code: string } | null;
+		pros: string[];
+		cons: string[];
+		metrics: string[];
+		bodyLines: string[];
+	}
+
+	const cols: Col[] = [];
+	let cur: Col | null = null;
+	let nextTag = '';
+	const lines = content.split('\n');
+	let i = 0;
+
+	function flush() {
+		if (cur && (cur.title || cur.bodyLines.length > 0 || cur.codeBlock || cur.pros.length > 0 || cur.cons.length > 0 || cur.metrics.length > 0)) {
+			cols.push(cur);
+		}
+	}
+
+	while (i < lines.length) {
+		const line = lines[i];
+
+		// separator with tag
+		const tagSep = line.match(/^---tag:\s*(.+)/);
+		if (tagSep) { flush(); nextTag = tagSep[1]; cur = null; i++; continue; }
+
+		// plain separator
+		if (/^---+\s*$/.test(line)) { flush(); cur = null; i++; continue; }
+
+		if (!cur) {
+			cur = { tag: nextTag, title: '', codeBlock: null, pros: [], cons: [], metrics: [], bodyLines: [] };
+			nextTag = '';
+		}
+
+		// title (first # line only)
+		const tm = line.match(/^#\s+(.+)/);
+		if (tm && !cur.title) { cur.title = tm[1]; i++; continue; }
+
+		if (/^```/.test(line)) {
+			const lang = line.replace(/^```/, '').trim();
+			const codeLines: string[] = [];
+			i++;
+			while (i < lines.length && !/^```/.test(lines[i])) { codeLines.push(lines[i]); i++; }
+			i++;
+			cur.codeBlock = { lang, code: codeLines.join('\n') };
+			continue;
+		}
+
+		if (/^###\s+Metrics\s*$/i.test(line)) {
+			i++;
+			while (i < lines.length && lines[i].trim() !== '' && !/^---/.test(lines[i]) && !/^#{1,3}\s/.test(lines[i]) && !/^```/.test(lines[i])) {
+				cur.metrics.push(lines[i]); i++;
+			}
+			continue;
+		}
+
+		// pro/con table (pipe table with Pro and Con in header)
+		if (/^\|.*\|\s*$/.test(line) && /Pro/i.test(line) && /Con/i.test(line)) {
+			i++;
+			if (i < lines.length && /^\|[\s:-]+\|/.test(lines[i])) i++;
+			while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) {
+				const parts = lines[i].split('|').filter((c: string) => c.trim() !== '').map((c: string) => c.trim());
+				if (parts.length >= 2) { cur.pros.push(parts[0]); cur.cons.push(parts[1]); }
+				else if (parts.length === 1) { cur.pros.push(parts[0]); cur.cons.push(''); }
+				i++;
+			}
+			continue;
+		}
+
+		cur.bodyLines.push(line);
+		i++;
+	}
+	flush();
+
+	// ── step 2: extract recommendation from last column if present ──
+	let recommendation: string | null = null;
+	if (cols.length > 0) {
+		const last = cols[cols.length - 1];
+		const bodyJoined = last.bodyLines.join('\n');
+		const recMatch = bodyJoined.match(/^##\s+(?:Recommendation|建议):?\s*\n([\s\S]*)$/);
+		if (recMatch) {
+			recommendation = recMatch[1].trim();
+			cols.pop();
+		} else {
+			const recInline = bodyJoined.match(/##\s+(?:Recommendation|建议):?\s*\n([\s\S]*)$/);
+			if (recInline) {
+				recommendation = recInline[1].trim();
+				const beforeRec = bodyJoined.replace(/##\s+(?:Recommendation|建议):?\s*\n[\s\S]*$/, '').trim();
+				last.bodyLines = beforeRec ? beforeRec.split('\n') : [];
+			}
+		}
+	}
+
+	// ── step 3: render approach cards ──
+	for (const col of cols) {
+		const card = outer.createDiv({ cls: 'he-approach' });
+
+		const header = card.createDiv({ cls: 'he-approach-header' });
+		if (col.tag) {
+			header.createSpan({ cls: 'he-tag', text: escapeHtml(col.tag) });
+		}
+		if (col.title) {
+			header.createEl('h2', { cls: 'he-approach-title', text: escapeHtml(col.title) });
+		}
+
+		if (col.codeBlock) {
+			const pre = card.createEl('pre', { cls: 'he-approach-code' });
+			const code = pre.createEl('code');
+			if (col.codeBlock.lang) code.addClass('language-' + col.codeBlock.lang);
+			code.textContent = col.codeBlock.code;
+		}
+
+		if (col.pros.length > 0 || col.cons.length > 0) {
+			const table = card.createEl('table', { cls: 'he-proscons' });
+			const thead = table.createEl('thead');
+			const hr = thead.createEl('tr');
+			hr.createEl('th', { text: 'Pro' });
+			hr.createEl('th', { text: 'Con' });
+			const tbody = table.createEl('tbody');
+			const maxRows = Math.max(col.pros.length, col.cons.length);
+			for (let r = 0; r < maxRows; r++) {
+				const tr = tbody.createEl('tr');
+				tr.createEl('td', { text: escapeHtml(col.pros[r] || '') });
+				tr.createEl('td', { text: escapeHtml(col.cons[r] || '') });
+			}
+		}
+
+		if (col.bodyLines.length > 0) {
+			const bodyDiv = card.createDiv({ cls: 'he-approach-body' });
+			applyMd(bodyDiv, col.bodyLines.join('\n'));
+		}
+
+		if (col.metrics.length > 0) {
+			const footer = card.createEl('footer', { cls: 'he-metrics' });
+			for (const mLine of col.metrics) {
+				const span = footer.createEl('span');
+				applyInline(span, mLine);
+			}
+		}
+	}
+
+	// ── step 4: recommendation banner ──
+	if (recommendation) {
+		const banner = outer.createDiv({ cls: 'he-recommendation' });
+		banner.createEl('strong', { text: '建议：' });
+		banner.appendChild(document.createTextNode(' '));
+		applyInline(banner, recommendation);
 	}
 }
 
@@ -39,50 +350,353 @@ function buildTimeline(parent: HTMLElement, content: string): void {
 	const items = content.trim().split('\n').filter(l => l.trim());
 	for (const line of items) {
 		const li = ul.createEl('li', { cls: 'he-tl-item' });
-		const m = line.match(/^-\s*\[(.+?)\]\s*(.+)/);
-		if (m) {
-			li.createSpan({ cls: 'he-tl-date', text: escapeHtml(m[1]) });
-			li.createSpan({ cls: 'he-tl-text', text: escapeHtml(m[2]) });
-		} else {
-			li.createSpan({ cls: 'he-tl-text', text: escapeHtml(line.replace(/^-\s*/, '')) });
+
+		// Strip leading `- ` list marker
+		let body = line.replace(/^-\s+/, '');
+
+		// Parse optional [date] at the beginning
+		let dateStr: string | null = null;
+		const dateMatch = body.match(/^\[(.+?)\]\s*/);
+		if (dateMatch) {
+			dateStr = dateMatch[1];
+			body = body.slice(dateMatch[0].length);
+		}
+
+		// Parse optional [sev:high|med|low] at the end
+		let sev: string | null = null;
+		const sevMatch = body.match(/\s*\[sev:(high|med|low)\]\s*$/i);
+		if (sevMatch) {
+			body = body.slice(0, sevMatch.index);
+			sev = sevMatch[1].toLowerCase();
+		}
+
+		// Date pill
+		if (dateStr) {
+			li.createSpan({ cls: 'he-tl-date', text: dateStr });
+		}
+
+		// Body text with full markdown rendering (bold, italic, code, links, etc.)
+		const textSpan = li.createSpan({ cls: 'he-tl-text' });
+		applyMd(textSpan, body);
+
+		// Severity badge + left-border accent
+		if (sev) {
+			li.createSpan({ cls: 'he-tl-sev ' + sev, text: sev.charAt(0).toUpperCase() + sev.slice(1) });
+			li.classList.add('sev-' + sev);
 		}
 	}
 }
 
 function buildDiagram(parent: HTMLElement, content: string): void {
 	const d = parent.createDiv({ cls: 'he-diagram' });
-	d.createEl('pre', { cls: 'he-diagram-pre', text: escapeHtml(content) });
-	d.createEl('p', { cls: 'he-diagram-caption', text: 'Diagram - render as SVG in a future version' });
+	const lines = content.split('\n');
+
+	// ---- Detect box-arrow format (any line starts with [( or {) ----
+	const hasBoxArrow = lines.some(l => /^\s*[[({]/.test(l.trim()));
+	if (!hasBoxArrow) {
+		// Fallback: styled ASCII (keep original behavior)
+		d.createEl('pre', { cls: 'he-diagram-pre', text: escapeHtml(content) });
+		return;
+	}
+
+	// ---- Constants ----
+	const NODE_H = 56;
+	const GAP_X = 40;
+	const GAP_Y = 80;
+	const PAD = 24;
+
+	// ---- Parse text format into nodes ----
+	const nodes: Array<{
+		text: string;
+		type: 'process' | 'terminal' | 'decision';
+		row: number;
+		col: number;
+		w: number;
+		x: number;
+		y: number;
+	}> = [];
+	const rowCols: number[] = [];
+
+	for (const raw of lines) {
+		const line = raw.trimEnd();
+		if (!line) continue;
+		const indent = raw.length - raw.trimStart().length;
+		const row = Math.round(indent / 2);
+
+		const pushNode = (text: string, type: 'process' | 'terminal' | 'decision') => {
+			const col = rowCols[row] ?? 0;
+			rowCols[row] = col + 1;
+			// Dynamic width: ~7.2px/char at 13px font + padding, capped at 300
+			const w = Math.max(120, Math.min(text.length * 7.2 + 30, 300));
+			nodes.push({ text, type, row, col, w, x: 0, y: 0 });
+		};
+
+		const pm = /^\[([^\]]+)\]/.exec(line);
+		if (pm) { pushNode(pm[1], 'process'); continue; }
+
+		const tm = /^\(([^)]+)\)/.exec(line);
+		if (tm) { pushNode(tm[1], 'terminal'); continue; }
+
+		const dm = /^\{([^}]+)\}/.exec(line);
+		if (dm) { pushNode(dm[1], 'decision'); continue; }
+	}
+
+	if (nodes.length === 0) {
+		d.createEl('pre', { cls: 'he-diagram-pre', text: escapeHtml(content) });
+		return;
+	}
+
+	// ---- Grid layout ----
+	for (const n of nodes) {
+		const sameRow = nodes.filter(o => o.row === n.row).sort((a, b) => a.col - b.col);
+		let x = PAD;
+		for (const rn of sameRow) {
+			if (rn.col < n.col) x += rn.w + GAP_X;
+		}
+		n.x = x;
+		n.y = n.row * (NODE_H + GAP_Y) + PAD;
+	}
+
+	const svgW = Math.max(...nodes.map(n => n.x + n.w + PAD), 200);
+	const svgH = Math.max(...nodes.map(n => n.y + NODE_H + PAD), 100);
+
+	// ---- Build SVG ----
+	const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+	let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#141413"/>
+  </marker>
+</defs>
+`;
+
+	// Horizontal edges: consecutive nodes in the same row
+	for (const n of nodes) {
+		const next = nodes.find(o => o.row === n.row && o.col === n.col + 1);
+		if (!next) continue;
+		svg += `<path class="edge" d="M ${n.x + n.w} ${n.y + NODE_H / 2} L ${next.x} ${next.y + NODE_H / 2}" marker-end="url(#arr)"/>\n`;
+	}
+
+	// Vertical edges: same column between adjacent rows
+	for (const n of nodes) {
+		const below = nodes.find(o => o.row === n.row + 1 && o.col === n.col);
+		if (!below) continue;
+		const x1 = n.x + n.w / 2;
+		const y1 = n.y + NODE_H;
+		const x2 = below.x + below.w / 2;
+		const y2 = below.y;
+		if (Math.abs(x1 - x2) > 2) {
+			// Step path when columns are offset
+			const my = (y1 + y2) / 2;
+			svg += `<path class="edge" d="M ${x1} ${y1} L ${x1} ${my} L ${x2} ${my} L ${x2} ${y2}" marker-end="url(#arr)"/>\n`;
+		} else {
+			svg += `<path class="edge" d="M ${x1} ${y1} L ${x2} ${y2}" marker-end="url(#arr)"/>\n`;
+		}
+	}
+
+	// Render each node shape + label
+	for (const n of nodes) {
+		const cx = n.x + n.w / 2;
+		const cy = n.y + NODE_H / 2;
+		const label = esc(n.text);
+
+		switch (n.type) {
+			case 'process':
+				svg += `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${NODE_H}" rx="8" class="node-bg"/>\n`;
+				break;
+			case 'terminal':
+				svg += `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${NODE_H}" rx="${NODE_H / 2}" class="node-bg"/>\n`;
+				break;
+			case 'decision':
+				svg += `<polygon points="${cx},${n.y} ${n.x + n.w},${cy} ${cx},${n.y + NODE_H} ${n.x},${cy}" class="node-bg"/>\n`;
+				break;
+		}
+		svg += `<text x="${cx}" y="${cy}" class="node-label" text-anchor="middle" dominant-baseline="central">${label}</text>\n`;
+	}
+
+	svg += `</svg>`;
+	d.innerHTML = svg;
+
+	// ---- Legend ----
+	const leg = d.createDiv({ cls: 'he-diagram-caption' });
+	leg.innerHTML = [
+		`<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px;">`,
+		`<span style="display:inline-block;width:20px;height:8px;border:1.5px solid #87867F;border-radius:3px;background:#F0EEE6;"></span> process`,
+		`</span>`,
+		`<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px;">`,
+		`<span style="display:inline-block;width:20px;height:8px;border:1.5px solid #87867F;border-radius:4px;background:#F0EEE6;"></span> terminal`,
+		`</span>`,
+		`<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px;">`,
+		`<span style="display:inline-block;width:8px;height:8px;border:1.5px solid #87867F;transform:rotate(45deg);background:#F0EEE6;"></span> decision`,
+		`</span>`,
+	].join('');
 }
 
 function buildReport(parent: HTMLElement, content: string, theme: string): void {
 	const outer = parent.createDiv({ cls: 'he-report ' + theme });
-	const lines = content.trim().split('\n').filter(Boolean);
-	let inKpi = false;
+	const lines = content.trim().split('\n');
+
+	type Section = 'none' | 'kpi' | 'highlights' | 'shipped' | 'velocity' | 'carryover' | 'body';
+	let section: Section = 'none';
+
 	let kpiRow: HTMLElement | null = null;
+	let highlightsUl: HTMLElement | null = null;
+	let shippedThead: HTMLElement | null = null;
+	let shippedTbody: HTMLElement | null = null;
+	let shippedFirstRow = true;
+	let velocityChart: HTMLElement | null = null;
+	let carryoverDiv: HTMLElement | null = null;
 	const bodyDiv = outer.createDiv({ cls: 'he-report-body' });
-	for (const line of lines) {
+
+	for (const rawLine of lines) {
+		const line = rawLine.trim();
+		if (!line) continue;
+
 		if (line.startsWith('## ')) {
-			inKpi = true;
-			kpiRow = outer.createDiv({ cls: 'he-kpi-row' });
-			continue;
-		}
-		if (line.startsWith('# ') && inKpi) {
-			inKpi = false;
-			bodyDiv.createEl('h3', { cls: 'he-report-h3', text: escapeHtml(line.replace(/^#\s*/, '')) });
-			continue;
-		}
-		if (inKpi && kpiRow) {
-			const km = line.match(/^-\s*(\d+[%MBT]?)\s*:\s*(.+)/);
-			if (km) {
-				const k = kpiRow.createDiv({ cls: 'he-kpi' });
-				k.createDiv({ cls: 'he-kpi-num', text: escapeHtml(km[1]) });
-				k.createDiv({ cls: 'he-kpi-label', text: escapeHtml(km[2]) });
+			const title = line.slice(3).trim();
+			if (title === '' || title === 'KPI') {
+				section = 'kpi';
+				kpiRow = outer.createDiv({ cls: 'he-kpi-row' });
 				continue;
 			}
+			bodyDiv.createEl('h4', { cls: 'he-report-h3', text: escapeHtml(title) });
+			continue;
 		}
-		const p = bodyDiv.createEl('p');
-		applyMd(p, line);
+
+		const h1Match = line.match(/^#\s+(.+)/);
+		if (h1Match) {
+			const title = h1Match[1];
+			section = 'body';
+			shippedFirstRow = true;
+
+			switch (title) {
+				case 'Highlights': {
+					section = 'highlights';
+					const hlSec = outer.createDiv({ cls: 'he-highlights' });
+					highlightsUl = hlSec.createEl('ul');
+					break;
+				}
+				case 'Shipped': {
+					section = 'shipped';
+					const tbl = outer.createEl('table', { cls: 'he-shipped' });
+					shippedThead = tbl.createEl('thead');
+					shippedTbody = tbl.createEl('tbody');
+					break;
+				}
+				case 'Velocity': {
+					section = 'velocity';
+					const velSec = outer.createDiv({ cls: 'he-velocity' });
+					velocityChart = velSec.createDiv({ cls: 'chart' });
+					break;
+				}
+				case 'Carryover': {
+					section = 'carryover';
+					carryoverDiv = outer.createDiv({ cls: 'he-carryover' });
+					break;
+				}
+				default:
+					bodyDiv.createEl('h3', { cls: 'he-report-h3', text: escapeHtml(title) });
+					break;
+			}
+			continue;
+		}
+
+		switch (section) {
+			case 'kpi': {
+				if (!kpiRow) break;
+				const km = line.match(/^-\s*(\d+(?:\.\d+)?[%MBTk]?)\s*:\s*(.+?)(?:\s*\(delta:\s*([+-]?±?\d+(?:\.\d+)?[%MBTk]?)\))?\s*$/);
+				if (km) {
+					const k = kpiRow.createDiv({ cls: 'he-kpi' });
+					k.createDiv({ cls: 'he-kpi-num', text: escapeHtml(km[1]) });
+					k.createDiv({ cls: 'he-kpi-label', text: escapeHtml(km[2]) });
+					if (km[3]) {
+						const d = km[3];
+						const dc = d.startsWith('+') ? ' up' : d.startsWith('-') ? ' down' : '';
+						k.createDiv({ cls: 'he-kpi-delta' + dc, text: escapeHtml(d) });
+					}
+				}
+				break;
+			}
+
+			case 'highlights': {
+				if (!highlightsUl) break;
+				const hm = line.match(/^-\s+(.+)/);
+				if (hm) {
+					const li = highlightsUl.createEl('li');
+					applyInline(li, hm[1]);
+				}
+				break;
+			}
+
+			case 'shipped': {
+				if (!line.startsWith('|')) break;
+				if (shippedFirstRow && shippedThead) {
+					const tr = shippedThead.createEl('tr');
+					line.split('|').filter(Boolean).forEach(c =>
+						tr.createEl('th', { text: escapeHtml(c.trim()) })
+					);
+					shippedFirstRow = false;
+				} else if (shippedTbody) {
+					const tr = shippedTbody.createEl('tr');
+					const cells = line.split('|').filter(Boolean).map(c => c.trim());
+					cells.forEach((c, i) => {
+						const td = tr.createEl('td');
+						if (i === cells.length - 1 && /^(low|med|high)$/i.test(c)) {
+							td.createSpan({ cls: 'he-risk-pill ' + c.toLowerCase(), text: escapeHtml(c) });
+						} else {
+							td.textContent = c;
+						}
+					});
+				}
+				break;
+			}
+
+			case 'velocity': {
+				if (!velocityChart) break;
+				const parts = line.split(',').map(s => s.trim());
+				const entries: Array<{ day: string; val: number }> = [];
+				let maxVal = 0;
+				for (const part of parts) {
+					const vm = part.match(/^([A-Za-z]+):(\d+(?:\.\d+)?)/);
+					if (vm) {
+						const v = parseFloat(vm[2]);
+						entries.push({ day: vm[1], val: v });
+						if (v > maxVal) maxVal = v;
+					}
+				}
+				if (entries.length === 0) break;
+				const scale = maxVal || 1;
+				for (const { day, val } of entries) {
+					const bar = velocityChart.createDiv({ cls: 'bar' });
+					const col = bar.createDiv({ cls: 'col' });
+					col.style.height = (val / scale * 100) + '%';
+					col.setAttribute('data-v', String(val));
+					bar.createEl('small', { text: day });
+				}
+				break;
+			}
+
+			case 'carryover': {
+				if (!carryoverDiv) break;
+				const cm = line.match(/^-\s*\[(.+?)\]\s*(.+)/);
+				if (cm) {
+					const status = cm[1].toLowerCase();
+					const desc = cm[2];
+					const item = carryoverDiv.createDiv({ cls: 'item ' + status });
+					item.createSpan({ cls: 'label', text: escapeHtml(status) });
+					const descSpan = item.createSpan({ cls: 'desc' });
+					applyInline(descSpan, desc);
+				}
+				break;
+			}
+
+			default: {
+				const p = bodyDiv.createEl('p');
+				applyInline(p, line);
+				break;
+			}
+		}
 	}
 }
 
@@ -97,11 +711,36 @@ function buildSlides(parent: HTMLElement, content: string): void {
 	nav.createEl('button', { text: chr(0x25B6), cls: 'he-slide-btn' })
 		.addEventListener('click', () => { if (currentIdx < slideDivs.length - 1) showSlide(currentIdx + 1); });
 	const wrap = parent.createDiv({ cls: 'he-slides' });
+	wrap.setAttribute('tabindex', '0');
 	function showSlide(idx: number) {
 		slideDivs.forEach((s, i) => s.classList.toggle('he-slide-hidden', i !== idx));
 		counter.textContent = (idx + 1) + ' / ' + slideDivs.length;
 		currentIdx = idx;
 	}
+	// Keyboard navigation
+	const keyHandler = (e: KeyboardEvent) => {
+		if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+			e.preventDefault();
+			if (currentIdx < slideDivs.length - 1) showSlide(currentIdx + 1);
+		} else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+			e.preventDefault();
+			if (currentIdx > 0) showSlide(currentIdx - 1);
+		} else if (e.key === 'Home' || e.key === '.') {
+			e.preventDefault();
+			showSlide(0);
+		} else if (e.key === 'End') {
+			e.preventDefault();
+			showSlide(slideDivs.length - 1);
+		} else if (e.key === 'f') {
+			e.preventDefault();
+			if (!document.fullscreenElement) {
+				document.documentElement.requestFullscreen().catch(() => {});
+			} else {
+				document.exitFullscreen().catch(() => {});
+			}
+		}
+	};
+	parent.addEventListener('keydown', keyHandler);
 	for (let i = 0; i < slides.length; i++) {
 		const lines = slides[i].trim().split('\n');
 		const title = lines.shift()?.replace(/^#\s*/, '') || '';
@@ -113,6 +752,8 @@ function buildSlides(parent: HTMLElement, content: string): void {
 		slideDivs.push(sd);
 	}
 	showSlide(0);
+	const help = parent.createDiv({ cls: 'he-slides-help' });
+	help.createSpan({ text: '\u2190 \u2192 or Space: navigate \u00b7 f: fullscreen \u00b7 Home/End: first/last' });
 }
 
 function chr(c: number): string { return String.fromCharCode(c); }
@@ -159,13 +800,71 @@ function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorC
 	}
 }
 
-async function exportNoteAsHTML(app: App): Promise<void> {
-	const file = app.workspace.getActiveFile();
-	if (!file) { new Notice('No active note'); return; }
-	const content = await app.vault.read(file);
-	const path = (file.parent ? file.parent.path + '/' : '') + file.basename + '.html';
-	await app.vault.create(path, content);
-	new Notice('Exported: ' + path);
+async function exportNoteAsHTML(app: App, plugin: Component): Promise<void> {
+    const file = app.workspace.getActiveFile();
+    if (!file) { new Notice('No active note'); return; }
+    
+    const content = await app.vault.read(file);
+    
+    // Render markdown to DOM using Obsidian's engine
+    const tempEl = createDiv();
+    await MarkdownRenderer.render(app, content, tempEl, file.path, plugin);
+    const bodyHtml = tempEl.innerHTML;
+    
+    const title = file.basename;
+    const htmlDoc = buildStandaloneHtml(bodyHtml, title);
+    const outPath = (file.parent ? file.parent.path + '/' : '') + title + '.html';
+    await app.vault.create(outPath, htmlDoc);
+    new Notice('Exported: ' + outPath);
+}
+
+function buildStandaloneHtml(bodyHtml: string, title: string): string {
+    return `<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(title)}</title>
+<style>
+:root {
+  --he-clay: #D97757; --he-slate: #141413; --he-ivory: #FAF9F5; --he-oat: #E3DACC;
+  --he-white: #FFFFFF; --he-gray-100: #F0EEE6; --he-gray-300: #D1CFC5;
+  --he-gray-500: #87867F; --he-gray-700: #3D3D3A;
+  --he-success: #788C5D; --he-warning: #C78E3F; --he-danger: #B04A4A; --he-info: #5C7CA3;
+  --he-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --he-font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+body { font-family: var(--he-font-sans); font-size: 16px; line-height: 1.6;
+       color: var(--he-slate); background: var(--he-ivory); max-width: 880px;
+       margin: 0 auto; padding: 48px 24px; -webkit-font-smoothing: antialiased; }
+h1 { font-size: 28px; font-weight: 500; }
+h2 { font-size: 22px; font-weight: 500; }
+h3 { font-size: 18px; font-weight: 500; }
+code { font-family: var(--he-font-mono); font-size: 0.9em; background: var(--he-gray-100); padding: 2px 6px; border-radius: 4px; }
+pre { background: var(--he-gray-100); padding: 16px; border-radius: 8px; overflow: auto; }
+pre code { background: none; padding: 0; }
+a { color: var(--he-info); text-decoration: none; border-bottom: 1px solid currentColor; }
+blockquote { border-left: 3px solid var(--he-gray-300); margin: 0; padding: 8px 20px; color: var(--he-gray-700); }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--he-gray-300); }
+img { max-width: 100%; }
+.zoom-container { transform-origin: top left; }
+.zoom-bar { position: fixed; bottom: 24px; right: 24px; display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--he-white); border: 1px solid var(--he-gray-300); border-radius: 12px; box-shadow: 0 4px 10px rgba(20,20,19,.08); z-index: 999; user-select: none; opacity: .7; transition: opacity .2s; }
+.zoom-bar:hover { opacity: 1; }
+.zoom-btn { display: grid; place-items: center; width: 28px; height: 28px; border: none; background: 0 0; border-radius: 4px; cursor: pointer; font-size: 16px; color: var(--he-slate); transition: background .1s; line-height: 1; }
+.zoom-btn:hover { background: var(--he-gray-100); }
+.zoom-level { min-width: 40px; text-align: center; font-family: var(--he-font-mono); font-size: 12px; color: var(--he-gray-500); }
+</style>
+</head>
+<body>
+<div class="zoom-container">
+${bodyHtml}
+</div>
+<script>
+(function(){var KEY='he-exp-zoom',zoom=parseFloat(localStorage.getItem(KEY))||1,MIN=.3,MAX=3,STEP=.1;function apply(){var c=document.querySelector('.zoom-container');if(!c)return;c.style.transform='scale('+zoom+')';c.style.transformOrigin='top left';c.style.width=(100/zoom)+'%';var el=document.querySelector('.zoom-level');if(el)el.textContent=Math.round(zoom*100)+'%';try{localStorage.setItem(KEY,zoom)}catch(e){}}var b=document.createElement('div');b.className='zoom-bar';b.innerHTML='<button class="zoom-btn" id="zi">+</button><span class="zoom-level">'+Math.round(zoom*100)+'%</span><button class="zoom-btn" id="zo">\u2212</button><button class="zoom-btn" id="zr">\u27F2</button>';document.body.appendChild(b);document.getElementById('zi').onclick=function(){zoom=Math.min(MAX,zoom+STEP);apply()};document.getElementById('zo').onclick=function(){zoom=Math.max(MIN,zoom-STEP);apply()};document.getElementById('zr').onclick=function(){zoom=1;apply()};document.addEventListener('wheel',function(e){if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoom=Math.max(MIN,Math.min(MAX,zoom-e.deltaY*.002));apply()},{passive:false});document.addEventListener('keydown',function(e){if(!e.ctrlKey&&!e.metaKey)return;if(e.key==='='||e.key==='+'){e.preventDefault();zoom=Math.min(MAX,zoom+STEP);apply()}else if(e.key==='-'){e.preventDefault();zoom=Math.max(MIN,zoom-STEP);apply()}else if(e.key==='0'){e.preventDefault();zoom=1;apply()}});apply()})();
+</script>
+</body>
+</html>`;
 }
 
 class HEHTMLView extends ItemView {
@@ -328,7 +1027,7 @@ export default class HEExtPlugin extends Plugin {
 			processor(src, el, ctx, this.settings.defaultTheme);
 		});
 
-		this.addCommand({ id: 'export-note', name: 'Export note as HTML', callback: () => exportNoteAsHTML(this.app) });
+		this.addCommand({ id: 'export-note', name: 'Export note as HTML', callback: () => exportNoteAsHTML(this.app, this) });
 		this.addCommand({ id: 'compare', name: 'Compare', editorCallback: (e) => e.replaceSelection('```html-effect\ncompare\n\nLeft\n---\nRight\n```') });
 		this.addCommand({ id: 'timeline', name: 'Timeline', editorCallback: (e) => e.replaceSelection('```html-effect\ntimeline\n\n- [2026-01] Event\n- [2026-06] Another\n```') });
 		this.addCommand({ id: 'report', name: 'Report', editorCallback: (e) => e.replaceSelection('```html-effect\n---\ntype: report\n---\n## \n- 85%: Rate\n\n# Title\nContent\n```') });
