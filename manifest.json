@@ -3,7 +3,7 @@
 	"name": "HTML Effectiveness",
 	"version": "1.0.19",
 	"minAppVersion": "1.6.0",
-	"description": "Render spatial HTML in Obsidian — compare, timeline, diagram, report, slides. Export notes as standalone HTML with zoom controls. Based on html-effectiveness methodology.",
+	"description": "Render spatial HTML in notes — compare, timeline, diagram, report, slides. Export as standalone HTML with zoom controls. Based on html-effectiveness methodology.",
 	"author": "rosswang",
 	"authorUrl": "https://github.com/yanqingwang",
 	"isDesktopOnly": false

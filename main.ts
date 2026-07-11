@@ -516,21 +516,18 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 	}
 
 	svg += `</svg>`;
-	d.innerHTML = svg;
+	d.insertAdjacentHTML('afterbegin', svg);
 
 	// ---- Legend ----
 	const leg = d.createDiv({ cls: 'he-diagram-caption' });
-	leg.innerHTML = [
-		`<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px;">`,
-		`<span style="display:inline-block;width:20px;height:8px;border:1.5px solid var(--he-gray-500,#87867F);border-radius:3px;background:var(--he-gray-100,#F0EEE6);"></span> process`,
-		`</span>`,
-		`<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px;">`,
-		`<span style="display:inline-block;width:20px;height:8px;border:1.5px solid var(--he-gray-500,#87867F);border-radius:4px;background:var(--he-gray-100,#F0EEE6);"></span> terminal`,
-		`</span>`,
-		`<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px;">`,
-		`<span style="display:inline-block;width:8px;height:8px;border:1.5px solid var(--he-gray-500,#87867F);transform:rotate(45deg);background:var(--he-gray-100,#F0EEE6);"></span> decision`,
-		`</span>`,
-	].join('');
+	function legItem(shape: string, label: string) {
+		const span = leg.createSpan({ attr: { style: 'display:inline-flex;align-items:center;gap:4px;margin:0 8px;' } });
+		const swatch = span.createSpan({ attr: { style: 'display:inline-block;border:1.5px solid var(--he-gray-500,#87867F);background:var(--he-gray-100,#F0EEE6);vertical-align:middle;' + shape } });
+		span.appendText(' ' + label);
+	}
+	legItem('width:20px;height:8px;border-radius:3px;', 'process');
+	legItem('width:20px;height:8px;border-radius:4px;', 'terminal');
+	legItem('width:8px;height:8px;transform:rotate(45deg);', 'decision');
 }
 
 function buildReport(parent: HTMLElement, content: string, theme: string): void {
