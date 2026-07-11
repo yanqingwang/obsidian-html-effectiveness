@@ -1002,8 +1002,6 @@ export default class HEExtPlugin extends Plugin {
 			this.views.push(view);
 			return view;
 		});
-		this.registerExtensions(['html'], VIEW_TYPE);
-
 		// Helper: reveal existing view for the same file if one exists; return true if found
 		const revealExisting = (filePath: string): boolean => {
 			for (const v of this.views) {
@@ -1054,15 +1052,6 @@ export default class HEExtPlugin extends Plugin {
 
 		this.registerEvent(this.app.workspace.on('layout-change', () => {
 			this.views = this.views.filter(v => v.leaf.view !== null);
-		}));
-
-		this.registerEvent(this.app.workspace.on('file-open', (file) => {
-			if (file && file instanceof TFile && file.extension === 'html') {
-				const leaf = this.app.workspace.getLeaf(false);
-				if (leaf && leaf.view instanceof HEHTMLView) {
-					void leaf.view.setFile(file);
-				}
-			}
 		}));
 
 		this.registerEvent(this.app.vault.on('modify', (file) => {
