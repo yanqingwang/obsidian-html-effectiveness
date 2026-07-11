@@ -464,13 +464,13 @@ function buildDiagram(parent, content) {
   const leg = d.createDiv({ cls: "he-diagram-caption" });
   leg.innerHTML = [
     `<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px;">`,
-    `<span style="display:inline-block;width:20px;height:8px;border:1.5px solid #87867F;border-radius:3px;background:#F0EEE6;"></span> process`,
+    `<span style="display:inline-block;width:20px;height:8px;border:1.5px solid var(--he-gray-500,#87867F);border-radius:3px;background:var(--he-gray-100,#F0EEE6);"></span> process`,
     `</span>`,
     `<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px;">`,
-    `<span style="display:inline-block;width:20px;height:8px;border:1.5px solid #87867F;border-radius:4px;background:#F0EEE6;"></span> terminal`,
+    `<span style="display:inline-block;width:20px;height:8px;border:1.5px solid var(--he-gray-500,#87867F);border-radius:4px;background:var(--he-gray-100,#F0EEE6);"></span> terminal`,
     `</span>`,
     `<span style="display:inline-flex;align-items:center;gap:4px;margin:0 8px;">`,
-    `<span style="display:inline-block;width:8px;height:8px;border:1.5px solid #87867F;transform:rotate(45deg);background:#F0EEE6;"></span> decision`,
+    `<span style="display:inline-block;width:8px;height:8px;border:1.5px solid var(--he-gray-500,#87867F);transform:rotate(45deg);background:var(--he-gray-100,#F0EEE6);"></span> decision`,
     `</span>`
   ].join("");
 }
@@ -814,7 +814,7 @@ img { max-width: 100%; }
 ${bodyHtml}
 </div>
 <script>
-(function(){var KEY='he-exp-zoom',zoom=parseFloat(localStorage.getItem(KEY))||1,MIN=.3,MAX=3,STEP=.1;function apply(){var c=document.querySelector('.zoom-container');if(!c)return;c.style.transform='scale('+zoom+')';c.style.transformOrigin='top left';c.style.width=(100/zoom)+'%';var el=document.querySelector('.zoom-level');if(el)el.textContent=Math.round(zoom*100)+'%';try{localStorage.setItem(KEY,zoom)}catch(e){}}var b=document.createElement('div');b.className='zoom-bar';b.innerHTML='<button class="zoom-btn" id="zi">+</button><span class="zoom-level">'+Math.round(zoom*100)+'%</span><button class="zoom-btn" id="zo">\u2212</button><button class="zoom-btn" id="zr">\u27F2</button>';document.body.appendChild(b);document.getElementById('zi').onclick=function(){zoom=Math.min(MAX,zoom+STEP);apply()};document.getElementById('zo').onclick=function(){zoom=Math.max(MIN,zoom-STEP);apply()};document.getElementById('zr').onclick=function(){zoom=1;apply()};document.addEventListener('wheel',function(e){if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoom=Math.max(MIN,Math.min(MAX,zoom-e.deltaY*.002));apply()},{passive:false});document.addEventListener('keydown',function(e){if(!e.ctrlKey&&!e.metaKey)return;if(e.key==='='||e.key==='+'){e.preventDefault();zoom=Math.min(MAX,zoom+STEP);apply()}else if(e.key==='-'){e.preventDefault();zoom=Math.max(MIN,zoom-STEP);apply()}else if(e.key==='0'){e.preventDefault();zoom=1;apply()}});apply()})();
+(function(){var KEY='he-exp-zoom',zoom=parseFloat(localStorage.getItem(KEY))||1,MIN=.3,MAX=3,STEP=.1;function apply(){var c=document.querySelector('.zoom-container');if(!c)return;c.style.transform='scale('+zoom+')';c.style.transformOrigin='top left';c.style.width=(100/zoom)+'%';var el=document.querySelector('.zoom-level');if(el)el.textContent=Math.round(zoom*100)+'%';try{localStorage.setItem(KEY,zoom)}catch(e){}}var b=document.createElement('div');b.className='zoom-bar';b.innerHTML='<button class="zoom-btn" id="zo">\u2212</button><span class="zoom-level">'+Math.round(zoom*100)+'%</span><button class="zoom-btn" id="zi">+</button><button class="zoom-btn" id="zr">\u27F2</button>';document.body.appendChild(b);document.getElementById('zi').onclick=function(){zoom=Math.min(MAX,zoom+STEP);apply()};document.getElementById('zo').onclick=function(){zoom=Math.max(MIN,zoom-STEP);apply()};document.getElementById('zr').onclick=function(){zoom=1;apply()};document.addEventListener('wheel',function(e){if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoom=Math.max(MIN,Math.min(MAX,zoom-e.deltaY*.002));apply()},{passive:false});document.addEventListener('keydown',function(e){if(!e.ctrlKey&&!e.metaKey)return;if(e.key==='='||e.key==='+'){e.preventDefault();zoom=Math.min(MAX,zoom+STEP);apply()}else if(e.key==='-'){e.preventDefault();zoom=Math.max(MIN,zoom-STEP);apply()}else if(e.key==='0'){e.preventDefault();zoom=1;apply()}});apply()})();
 <\/script>
 </body>
 </html>`;
