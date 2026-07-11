@@ -464,7 +464,6 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 	const NS = 'http://www.w3.org/2000/svg';
 	const svg = document.createElementNS(NS, 'svg') as unknown as SVGSVGElement;
 	svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
-	svg.setAttribute('style', 'width:100%;height:auto;display:block');
 
 	const defs = document.createElementNS(NS, 'defs');
 	const marker = document.createElementNS(NS, 'marker');
@@ -552,14 +551,14 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 
 	// ---- Legend ----
 	const leg = d.createDiv({ cls: 'he-diagram-caption' });
-	function legItem(shape: string, label: string) {
-		const span = leg.createSpan({ attr: { style: 'display:inline-flex;align-items:center;gap:4px;margin:0 8px;' } });
-		span.createSpan({ attr: { style: 'display:inline-block;border:1.5px solid var(--he-gray-500,#87867F);background:var(--he-gray-100,#F0EEE6);vertical-align:middle;' + shape } });
+	function legItem(swatchCls: string, label: string) {
+		const span = leg.createSpan({ cls: 'legend-item' });
+		span.createSpan({ cls: 'legend-swatch ' + swatchCls });
 		span.appendText(' ' + label);
 	}
-	legItem('width:20px;height:8px;border-radius:3px;', 'process');
-	legItem('width:20px;height:8px;border-radius:4px;', 'terminal');
-	legItem('width:8px;height:8px;transform:rotate(45deg);', 'decision');
+	legItem('process', 'process');
+	legItem('terminal', 'terminal');
+	legItem('decision', 'decision');
 }
 
 function buildReport(parent: HTMLElement, content: string, theme: string): void {

@@ -349,8 +349,23 @@
   color: var(--text-muted, var(--he-gray-500));
   font-size: 12px;
   text-align: center;
-  margin-top: var(--he-sp-2);
+  margin-top: 6px;
 }
+.he-diagram-caption .legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 8px;
+}
+.he-diagram-caption .legend-swatch {
+  display: inline-block;
+  border: 1.5px solid var(--he-gray-500, #87867F);
+  background: var(--he-gray-100, #F0EEE6);
+  vertical-align: middle;
+}
+.he-diagram-caption .legend-swatch.process { width: 20px; height: 8px; border-radius: 3px; }
+.he-diagram-caption .legend-swatch.terminal { width: 20px; height: 8px; border-radius: 4px; }
+.he-diagram-caption .legend-swatch.decision { width: 8px; height: 8px; transform: rotate(45deg); }
 
 /* diagram SVG edge/path/node */
 .he-diagram .edge {
