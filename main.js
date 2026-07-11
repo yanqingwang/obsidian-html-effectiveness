@@ -941,6 +941,7 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
       this.views.push(view);
       return view;
     });
+    this.registerExtensions(["html"], VIEW_TYPE);
     const revealExisting = (filePath) => {
       for (const v of this.views) {
         if (v.file?.path === filePath && v.leaf.view !== null) {

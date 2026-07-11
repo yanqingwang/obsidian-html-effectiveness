@@ -1002,6 +1002,8 @@ export default class HEExtPlugin extends Plugin {
 			this.views.push(view);
 			return view;
 		});
+		this.registerExtensions(['html'], VIEW_TYPE);
+
 		// Helper: reveal existing view for the same file if one exists; return true if found
 		const revealExisting = (filePath: string): boolean => {
 			for (const v of this.views) {
