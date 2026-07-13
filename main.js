@@ -141,13 +141,13 @@ function applyInline(parent, text) {
     parts.push({ type: "text", content: escaped.slice(lastIndex) });
   }
   if (parts.length === 0) {
-    parent.appendChild(document.createTextNode(escaped));
+    parent.appendChild(parent.ownerDocument.createTextNode(escaped));
     return;
   }
   for (const part of parts) {
     switch (part.type) {
       case "text":
-        parent.appendChild(document.createTextNode(part.content));
+        parent.appendChild(parent.ownerDocument.createTextNode(part.content));
         break;
       case "bold":
         parent.createEl("strong", { text: part.content });
@@ -315,7 +315,7 @@ function buildCompare(parent, content, theme) {
   if (recommendation) {
     const banner = outer.createDiv({ cls: "he-recommendation" });
     banner.createEl("strong", { text: "\u5EFA\u8BAE\uFF1A" });
-    banner.appendChild(document.createTextNode(" "));
+    banner.appendChild(banner.ownerDocument.createTextNode(" "));
     applyInline(banner, recommendation);
   }
 }
@@ -407,10 +407,10 @@ function buildDiagram(parent, content) {
   const svgW = Math.max(...nodes.map((n) => n.x + n.w + PAD), 200);
   const svgH = Math.max(...nodes.map((n) => n.y + NODE_H + PAD), 100);
   const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
+  const svg = parent.ownerDocument.createElementNS(NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
-  const defs = document.createElementNS(NS, "defs");
-  const marker = document.createElementNS(NS, "marker");
+  const defs = parent.ownerDocument.createElementNS(NS, "defs");
+  const marker = parent.ownerDocument.createElementNS(NS, "marker");
   marker.setAttribute("id", "arr");
   marker.setAttribute("viewBox", "0 0 10 10");
   marker.setAttribute("refX", "9");
@@ -418,14 +418,14 @@ function buildDiagram(parent, content) {
   marker.setAttribute("markerWidth", "6");
   marker.setAttribute("markerHeight", "6");
   marker.setAttribute("orient", "auto-start-reverse");
-  const mpath = document.createElementNS(NS, "path");
+  const mpath = parent.ownerDocument.createElementNS(NS, "path");
   mpath.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
   mpath.setAttribute("fill", "#141413");
   marker.appendChild(mpath);
   defs.appendChild(marker);
   svg.appendChild(defs);
   function addPath(d2, cls = "edge") {
-    const el = document.createElementNS(NS, "path");
+    const el = parent.ownerDocument.createElementNS(NS, "path");
     el.setAttribute("d", d2);
     el.setAttribute("class", cls);
     el.setAttribute("marker-end", "url(#arr)");
@@ -454,7 +454,7 @@ function buildDiagram(parent, content) {
     let shape;
     switch (n.type) {
       case "process":
-        shape = document.createElementNS(NS, "rect");
+        shape = parent.ownerDocument.createElementNS(NS, "rect");
         shape.setAttribute("x", String(n.x));
         shape.setAttribute("y", String(n.y));
         shape.setAttribute("width", String(n.w));
@@ -462,7 +462,7 @@ function buildDiagram(parent, content) {
         shape.setAttribute("rx", "8");
         break;
       case "terminal":
-        shape = document.createElementNS(NS, "rect");
+        shape = parent.ownerDocument.createElementNS(NS, "rect");
         shape.setAttribute("x", String(n.x));
         shape.setAttribute("y", String(n.y));
         shape.setAttribute("width", String(n.w));
@@ -470,13 +470,13 @@ function buildDiagram(parent, content) {
         shape.setAttribute("rx", String(NODE_H / 2));
         break;
       case "decision":
-        shape = document.createElementNS(NS, "polygon");
+        shape = parent.ownerDocument.createElementNS(NS, "polygon");
         shape.setAttribute("points", `${cx},${n.y} ${n.x + n.w},${cy} ${cx},${n.y + NODE_H} ${n.x},${cy}`);
         break;
     }
     shape.setAttribute("class", "node-bg");
     svg.appendChild(shape);
-    const text = document.createElementNS(NS, "text");
+    const text = parent.ownerDocument.createElementNS(NS, "text");
     text.setAttribute("x", String(cx));
     text.setAttribute("y", String(cy));
     text.setAttribute("class", "node-label");
@@ -695,11 +695,12 @@ function buildSlides(parent, content) {
       showSlide(slideDivs.length - 1);
     } else if (e.key === "f") {
       e.preventDefault();
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {
+      const doc = e.target.ownerDocument;
+      if (!doc.fullscreenElement) {
+        doc.documentElement.requestFullscreen().catch(() => {
         });
       } else {
-        document.exitFullscreen().catch(() => {
+        doc.exitFullscreen().catch(() => {
         });
       }
     }
@@ -737,11 +738,10 @@ function processor(source, el, _ctx, defaultTheme) {
         try {
           const parsed = (0, import_obsidian.parseYaml)(yml);
           if (parsed && typeof parsed === "object") {
-            const o = parsed;
-            if (o.theme === "light")
+            if (parsed.theme === "light")
               theme = "light";
-            if (typeof o.type === "string") {
-              const t = o.type;
+            if (typeof parsed.type === "string") {
+              const t = parsed.type;
               if (t === "compare" || t === "timeline" || t === "diagram" || t === "report" || t === "slides")
                 type = t;
             }
@@ -841,7 +841,7 @@ ${bodyHtml}
 </body>
 </html>`;
 }
-var HEHTMLView = class extends import_obsidian.ItemView {
+var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
   constructor(leaf) {
     super(leaf);
     this.file = null;
@@ -867,19 +867,14 @@ var HEHTMLView = class extends import_obsidian.ItemView {
     return { file: this.file?.path };
   }
   async setFile(file) {
-    try {
-      const allViews = this.app.plugins?.plugins?.["html-effectiveness"]?.views || [];
-      for (const v of allViews) {
-        if (v !== this && v.file?.path === file.path && v.leaf.view !== null) {
-          this.app.workspace.setActiveLeaf(v.leaf, { focus: true });
-          try {
-            this.leaf.detach();
-          } catch {
-          }
-          return;
-        }
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+    for (const leaf of leaves) {
+      const view = leaf.view;
+      if (view !== this && view instanceof _HEHTMLView && view.file?.path === file.path && leaf.view !== null) {
+        this.app.workspace.setActiveLeaf(leaf, { focus: true });
+        this.leaf.detach();
+        return;
       }
-    } catch {
     }
     this.file = file;
     await this.loadContent();

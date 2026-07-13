@@ -152,7 +152,7 @@ function applyInline(parent: HTMLElement, text: string): void {
 
 	// If no matches, just set text content
 	if (parts.length === 0) {
-		parent.appendChild(document.createTextNode(escaped));
+		parent.appendChild(parent.ownerDocument.createTextNode(escaped));
 		return;
 	}
 
@@ -160,7 +160,7 @@ function applyInline(parent: HTMLElement, text: string): void {
 	for (const part of parts) {
 		switch (part.type) {
 			case 'text':
-				parent.appendChild(document.createTextNode(part.content));
+				parent.appendChild(parent.ownerDocument.createTextNode(part.content));
 				break;
 			case 'bold':
 				parent.createEl('strong', { text: part.content });
@@ -175,12 +175,12 @@ function applyInline(parent: HTMLElement, text: string): void {
 				parent.createEl('del', { text: part.content });
 				break;
 			case 'link': {
-				const data = JSON.parse(part.content);
+				const data: { text: string; url: string } = JSON.parse(part.content);
 				parent.createEl('a', { text: data.text, href: data.url });
 				break;
 			}
 			case 'image': {
-				const data = JSON.parse(part.content);
+				const data: { src: string; alt: string } = JSON.parse(part.content);
 				parent.createEl('img', { attr: { src: data.src, alt: data.alt } });
 				break;
 			}
@@ -340,7 +340,7 @@ function buildCompare(parent: HTMLElement, content: string, theme: string): void
 	if (recommendation) {
 		const banner = outer.createDiv({ cls: 'he-recommendation' });
 		banner.createEl('strong', { text: '建议：' });
-		banner.appendChild(document.createTextNode(' '));
+		banner.appendChild(banner.ownerDocument.createTextNode(' '));
 		applyInline(banner, recommendation);
 	}
 }
@@ -462,11 +462,11 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 
 	// ---- Build SVG ----
 	const NS = 'http://www.w3.org/2000/svg';
-	const svg = document.createElementNS(NS, 'svg') as unknown as SVGSVGElement;
+	const svg = parent.ownerDocument.createElementNS(NS, 'svg');
 	svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
 
-	const defs = document.createElementNS(NS, 'defs');
-	const marker = document.createElementNS(NS, 'marker');
+	const defs = parent.ownerDocument.createElementNS(NS, 'defs');
+	const marker = parent.ownerDocument.createElementNS(NS, 'marker');
 	marker.setAttribute('id', 'arr');
 	marker.setAttribute('viewBox', '0 0 10 10');
 	marker.setAttribute('refX', '9');
@@ -474,7 +474,7 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 	marker.setAttribute('markerWidth', '6');
 	marker.setAttribute('markerHeight', '6');
 	marker.setAttribute('orient', 'auto-start-reverse');
-	const mpath = document.createElementNS(NS, 'path');
+	const mpath = parent.ownerDocument.createElementNS(NS, 'path');
 	mpath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
 	mpath.setAttribute('fill', '#141413');
 	marker.appendChild(mpath);
@@ -482,7 +482,7 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 	svg.appendChild(defs);
 
 	function addPath(d: string, cls = 'edge') {
-		const el = document.createElementNS(NS, 'path');
+		const el = parent.ownerDocument.createElementNS(NS, 'path');
 		el.setAttribute('d', d);
 		el.setAttribute('class', cls);
 		el.setAttribute('marker-end', 'url(#arr)');
@@ -515,7 +515,7 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 		let shape: SVGElement;
 		switch (n.type) {
 			case 'process':
-				shape = document.createElementNS(NS, 'rect');
+				shape = parent.ownerDocument.createElementNS(NS, 'rect');
 				shape.setAttribute('x', String(n.x));
 				shape.setAttribute('y', String(n.y));
 				shape.setAttribute('width', String(n.w));
@@ -523,7 +523,7 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 				shape.setAttribute('rx', '8');
 				break;
 			case 'terminal':
-				shape = document.createElementNS(NS, 'rect');
+				shape = parent.ownerDocument.createElementNS(NS, 'rect');
 				shape.setAttribute('x', String(n.x));
 				shape.setAttribute('y', String(n.y));
 				shape.setAttribute('width', String(n.w));
@@ -531,13 +531,13 @@ function buildDiagram(parent: HTMLElement, content: string): void {
 				shape.setAttribute('rx', String(NODE_H / 2));
 				break;
 			case 'decision':
-				shape = document.createElementNS(NS, 'polygon');
+				shape = parent.ownerDocument.createElementNS(NS, 'polygon');
 				shape.setAttribute('points', `${cx},${n.y} ${n.x + n.w},${cy} ${cx},${n.y + NODE_H} ${n.x},${cy}`);
 				break;
 		}
 		shape.setAttribute('class', 'node-bg');
 		svg.appendChild(shape);
-		const text = document.createElementNS(NS, 'text');
+		const text = parent.ownerDocument.createElementNS(NS, 'text');
 		text.setAttribute('x', String(cx));
 		text.setAttribute('y', String(cy));
 		text.setAttribute('class', 'node-label');
@@ -761,10 +761,11 @@ function buildSlides(parent: HTMLElement, content: string): void {
 			showSlide(slideDivs.length - 1);
 		} else if (e.key === 'f') {
 			e.preventDefault();
-			if (!document.fullscreenElement) {
-				document.documentElement.requestFullscreen().catch(() => {});
+			const doc = (e.target as HTMLElement).ownerDocument;
+			if (!doc.fullscreenElement) {
+				doc.documentElement.requestFullscreen().catch(() => {});
 			} else {
-				document.exitFullscreen().catch(() => {});
+				doc.exitFullscreen().catch(() => {});
 			}
 		}
 	};
@@ -800,10 +801,9 @@ function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorC
 				try {
 					const parsed: Record<string, unknown> | null = parseYaml(yml) as Record<string, unknown> | null;
 					if (parsed && typeof parsed === 'object') {
-						const o = parsed as Record<string, unknown>;
-						if (o.theme === 'light') theme = 'light';
-						if (typeof o.type === 'string') {
-							const t: string = o.type;
+						if (parsed.theme === 'light') theme = 'light';
+						if (typeof parsed.type === 'string') {
+							const t: string = parsed.type;
 							if (t === 'compare' || t === 'timeline' || t === 'diagram' || t === 'report' || t === 'slides') type = t;
 						}
 					}
@@ -928,16 +928,15 @@ class HEHTMLView extends ItemView {
 
 	async setFile(file: TFile): Promise<void> {
 		// Don't allow the same HTML file to open in multiple tabs
-		try {
-			const allViews: HEHTMLView[] = (this.app as any).plugins?.plugins?.['html-effectiveness']?.views || [];
-			for (const v of allViews) {
-				if (v !== this && v.file?.path === file.path && v.leaf.view !== null) {
-					this.app.workspace.setActiveLeaf(v.leaf, { focus: true });
-					try { (this.leaf as any).detach(); } catch {}
-					return;
-				}
+		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+		for (const leaf of leaves) {
+			const view = leaf.view;
+			if (view !== this && view instanceof HEHTMLView && view.file?.path === file.path && leaf.view !== null) {
+				this.app.workspace.setActiveLeaf(leaf, { focus: true });
+				this.leaf.detach();
+				return;
 			}
-		} catch {}
+		}
 		this.file = file;
 		await this.loadContent();
 	}
@@ -952,7 +951,7 @@ class HEHTMLView extends ItemView {
 			}
 			const fullPath: string = parentPath ? parentPath + '/' + url : url;
 			try {
-				const resourceUrl: string = this.app.vault.adapter.getResourcePath(fullPath) as string;
+				const resourceUrl = this.app.vault.adapter!.getResourcePath(fullPath);
 				return attr + '="' + resourceUrl + '"';
 			} catch {
 				return _match;
