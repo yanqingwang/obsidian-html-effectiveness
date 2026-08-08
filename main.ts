@@ -339,7 +339,7 @@ function buildCompare(parent: HTMLElement, content: string, theme: string): void
 	// ── step 4: recommendation banner ──
 	if (recommendation) {
 		const banner = outer.createDiv({ cls: 'he-recommendation' });
-		banner.createEl('strong', { text: '建议：' });
+		banner.createEl('strong', { text: 'Recommendation: ' });
 		banner.appendChild(banner.ownerDocument.createTextNode(' '));
 		applyInline(banner, recommendation);
 	}

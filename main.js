@@ -314,7 +314,7 @@ function buildCompare(parent, content, theme) {
   }
   if (recommendation) {
     const banner = outer.createDiv({ cls: "he-recommendation" });
-    banner.createEl("strong", { text: "\u5EFA\u8BAE\uFF1A" });
+    banner.createEl("strong", { text: "Recommendation: " });
     banner.appendChild(banner.ownerDocument.createTextNode(" "));
     applyInline(banner, recommendation);
   }
