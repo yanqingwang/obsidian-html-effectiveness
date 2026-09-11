@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-html-effectiveness",
-	"version": "1.0.0",
+	"version": "1.0.24",
 	"description": "Render spatial HTML content (compare/diagram/slides/report/timeline) in Obsidian",
 	"main": "main.js",
 	"scripts": {
