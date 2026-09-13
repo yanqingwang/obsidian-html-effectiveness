@@ -50,6 +50,8 @@ Open `.html` files directly in Obsidian with full rendering / 在 Obsidian 中�
 - **Image support**: relative-path images are rewritten to Obsidian resource URLs / 图片支持：相对路径图片自动转换为 Obsidian 资源 URL
 - **Live refresh**: the view updates automatically when the `.html` file is edited / 实时刷新：编辑 .html 文件后视图自动更新
 - **Interactivity**: the iframe sandbox includes `allow-scripts`, so JavaScript interactions work / 交互支持：iframe sandbox 包含 allow-scripts，支持 JavaScript 交互
+- **In-app editing**: click "✏️ Edit" in the toolbar to edit the raw HTML text, then save with Ctrl/Cmd+S or the "💾 Save" button (overwrites the original file); "👁 Preview" switches back to rendering. Unsaved changes are confirmed before discard / 应用内编辑：点击工具栏 "✏️ Edit" 直接编辑 HTML 源文本，Ctrl/Cmd+S 或 "💾 Save" 按钮覆盖保存原文件；"👁 Preview" 切回渲染视图。有未保存修改时切换预览会先确认
+- **Edit commands**: "Toggle edit/preview mode for HTML viewer" and "Save HTML file (edit mode)" in the command palette / 命令面板提供 "Toggle edit/preview mode for HTML viewer" 与 "Save HTML file (edit mode)"
 
 ### More / 其他
 
@@ -111,12 +113,32 @@ In the Obsidian file explorer / 在 Obsidian 文件管理器中：
 | Command / 命令 | Description / 说明 |
 |---------|-------------|
 | Open current file in HTML viewer | Open the current file in the HTML viewer / 在 HTML 查看器中打开当前文件 |
+| Toggle edit/preview mode for HTML viewer | Switch the HTML viewer between editing and preview / 在 HTML 查看器的编辑与预览之间切换 |
+| Save HTML file (edit mode) | Overwrite-save the file being edited / 覆盖保存正在编辑的文件 |
 | Export note as HTML | Export the current note as a standalone HTML file / 导出当前笔记为独立 HTML |
 | Compare | Insert the Compare template / 插入 Compare 模板 |
 | Timeline | Insert the Timeline template / 插入 Timeline 模板 |
 | Report | Insert the Report template / 插入 Report 模板 |
 | Slides | Insert the Slides template / 插入 Slides 模板 |
 | Diagram | Insert the Diagram template / 插入 Diagram 模板 |
+
+---
+
+## Changelog / 更新日志
+
+### 1.1.0
+
+- **In-app editing / 应用内编辑**: edit raw HTML text directly in the viewer via a toolbar toggle; Ctrl/Cmd+S or the Save button overwrites the original file / 通过工具栏在查看器中直接编辑 HTML 源文本，Ctrl/Cmd+S 或保存按钮覆盖保存原文件
+- Unsaved changes are confirmed before switching back to preview / 切回预览前如有未保存修改会先确认
+
+### 1.0.24
+
+- Adaptive fit-to-width zoom on open; removed stale localStorage zoom / 打开时自适应宽度缩放，移除旧的缩放持久化
+- Robust flex-based view container layout / 更稳健的 flex 视图容器布局
+
+### 1.0.23
+
+- Bilingual README, English UI copy / 双语 README，英文界面文案
 
 ---
 

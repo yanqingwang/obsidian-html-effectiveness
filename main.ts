@@ -897,7 +897,10 @@ ${bodyHtml}
 
 class HEHTMLView extends ItemView {
 	file: TFile | null = null;
+	mode: 'preview' | 'edit' = 'preview';
+	dirty = false;
 	private iframe: HTMLIFrameElement | null = null;
+	private textarea: HTMLTextAreaElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf) {
 		super(leaf);
@@ -908,22 +911,26 @@ class HEHTMLView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return this.file ? this.file.basename : 'HTML Preview';
+		const base = this.file ? this.file.basename : 'HTML Preview';
+		return this.mode === 'edit' ? base + ' (Edit)' : base;
 	}
 
 	getIcon(): string {
-		return 'eye';
+		return this.mode === 'edit' ? 'pencil' : 'eye';
 	}
 
 	async setState(state: Record<string, unknown>): Promise<void> {
 		if (state?.file && typeof state.file === 'string') {
 			const file = this.app.vault.getFileByPath(state.file);
-			if (file) await this.setFile(file);
+			if (file) {
+				this.mode = state.mode === 'edit' ? 'edit' : 'preview';
+				await this.setFile(file);
+			}
 		}
 	}
 
 	getState(): Record<string, unknown> {
-		return { file: this.file?.path };
+		return { file: this.file?.path, mode: this.mode };
 	}
 
 	async setFile(file: TFile): Promise<void> {
@@ -938,7 +945,77 @@ class HEHTMLView extends ItemView {
 			}
 		}
 		this.file = file;
-		await this.loadContent();
+		await this.render();
+	}
+
+	/** Rebuild the view chrome (toolbar) then render preview or editor body. */
+	private async render(): Promise<void> {
+		const container = this.contentEl;
+		container.empty();
+		container.addClass('he-htmlview-container');
+		this.iframe = null;
+		this.textarea = null;
+
+		const toolbar = container.createDiv({ cls: 'he-view-toolbar' });
+		const toggle = toolbar.createEl('button', {
+			cls: 'he-view-toggle',
+			text: this.mode === 'preview' ? '✏️ Edit' : '👁 Preview'
+		});
+		toggle.addEventListener('click', () => void this.toggleMode());
+		const save = toolbar.createEl('button', {
+			cls: 'he-view-save',
+			text: '💾 Save (Ctrl+S)'
+		});
+		save.hidden = this.mode !== 'edit';
+		save.addEventListener('click', () => void this.saveFile());
+
+		if (this.mode === 'edit') {
+			await this.loadEditor();
+		} else {
+			await this.loadContent();
+		}
+	}
+
+	async toggleMode(): Promise<void> {
+		if (this.mode === 'edit' && this.dirty) {
+			if (!window.confirm('Discard unsaved changes and switch to preview?')) return;
+		}
+		this.dirty = false;
+		this.mode = this.mode === 'preview' ? 'edit' : 'preview';
+		await this.render();
+	}
+
+	async saveFile(): Promise<void> {
+		if (!this.file || !this.textarea) return;
+		const newText = this.textarea.value;
+		const current = await this.app.vault.read(this.file);
+		if (newText === current) {
+			this.dirty = false;
+			return;
+		}
+		await this.app.vault.modify(this.file, newText);
+		this.dirty = false;
+		new Notice('Saved: ' + this.file.path);
+	}
+
+	private async loadEditor(): Promise<void> {
+		if (!this.file) return;
+		const content = await this.app.vault.read(this.file);
+		const container = this.contentEl;
+		const ta = container.ownerDocument.createElement('textarea');
+		ta.className = 'he-edit-textarea';
+		ta.spellcheck = false;
+		ta.value = content;
+		ta.addEventListener('input', () => { this.dirty = true; });
+		ta.addEventListener('keydown', (e: KeyboardEvent) => {
+			if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 's' || e.key === 'S')) {
+				e.preventDefault();
+				void this.saveFile();
+			}
+		});
+		container.appendChild(ta);
+		this.textarea = ta;
+		this.dirty = false;
 	}
 
 	private async loadContent(): Promise<void> {
@@ -971,8 +1048,6 @@ class HEHTMLView extends ItemView {
 			}
 		}
 		const container = this.contentEl;
-		container.empty();
-		container.addClass('he-htmlview-container');
 		this.iframe = container.ownerDocument.createElement('iframe');
 		this.iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts');
 		this.iframe.setAttribute('srcdoc', content);
@@ -1059,11 +1134,35 @@ export default class HEExtPlugin extends Plugin {
 			if (file instanceof TFile && file.extension === 'html') {
 				for (const view of this.views) {
 					if (view.file?.path === file.path) {
+						// Don't clobber an editor the user is actively working in
+						if (view.mode === 'edit') continue;
 						void view.setFile(file);
 					}
 				}
 			}
 		}));
+
+		this.addCommand({
+			id: 'toggle-html-edit',
+			name: 'Toggle edit/preview mode for HTML viewer',
+			checkCallback: (checking) => {
+				const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
+				if (!active) return false;
+				if (!checking) void active.toggleMode();
+				return true;
+			}
+		});
+
+		this.addCommand({
+			id: 'save-html-edit',
+			name: 'Save HTML file (edit mode)',
+			checkCallback: (checking) => {
+				const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
+				if (!active || active.mode !== 'edit') return false;
+				if (!checking) void active.saveFile();
+				return true;
+			}
+		});
 
 		this.registerMarkdownCodeBlockProcessor('html-effect', (src, el, ctx) => {
 			processor(src, el, ctx, this.settings.defaultTheme);

@@ -1,9 +1,9 @@
 {
 	"id": "html-effectiveness",
 	"name": "HTML Effectiveness",
-	"version": "1.0.24",
+	"version": "1.1.0",
 	"minAppVersion": "1.6.0",
-	"description": "Render spatial HTML in notes — compare, timeline, diagram, report, slides. Export as standalone HTML with zoom controls. Based on html-effectiveness methodology.",
+	"description": "Render spatial HTML in notes — compare, timeline, diagram, report, slides. Export as standalone HTML with zoom controls. Based on html-effectiveness methodology. Edit HTML files in-app with overwrite save.",
 	"author": "rosswang",
 	"authorUrl": "https://github.com/yanqingwang",
 	"isDesktopOnly": false

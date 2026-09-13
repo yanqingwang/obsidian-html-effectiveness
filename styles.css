@@ -817,17 +817,53 @@
   padding: 0;
   margin: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.he-view-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex: 0 0 auto;
+}
+.he-view-toolbar button {
+  cursor: pointer;
+  font-size: var(--font-ui-small);
+}
+.he-view-save {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+.he-view-save:hover {
+  background: var(--interactive-accent-hover);
 }
 .he-htmlview-iframe {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
   width: 100%;
   height: 100%;
   border: none;
   display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.he-edit-textarea {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: 16px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: var(--font-ui-medium, 14px);
+  line-height: 1.55;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
 }
 
 /* ====== Utility overrides for dark/light wrappers ====== */

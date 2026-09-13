@@ -845,26 +845,32 @@ var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
   constructor(leaf) {
     super(leaf);
     this.file = null;
+    this.mode = "preview";
+    this.dirty = false;
     this.iframe = null;
+    this.textarea = null;
   }
   getViewType() {
     return VIEW_TYPE;
   }
   getDisplayText() {
-    return this.file ? this.file.basename : "HTML Preview";
+    const base = this.file ? this.file.basename : "HTML Preview";
+    return this.mode === "edit" ? base + " (Edit)" : base;
   }
   getIcon() {
-    return "eye";
+    return this.mode === "edit" ? "pencil" : "eye";
   }
   async setState(state) {
     if (state?.file && typeof state.file === "string") {
       const file = this.app.vault.getFileByPath(state.file);
-      if (file)
+      if (file) {
+        this.mode = state.mode === "edit" ? "edit" : "preview";
         await this.setFile(file);
+      }
     }
   }
   getState() {
-    return { file: this.file?.path };
+    return { file: this.file?.path, mode: this.mode };
   }
   async setFile(file) {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
@@ -877,7 +883,76 @@ var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
       }
     }
     this.file = file;
-    await this.loadContent();
+    await this.render();
+  }
+  /** Rebuild the view chrome (toolbar) then render preview or editor body. */
+  async render() {
+    const container = this.contentEl;
+    container.empty();
+    container.addClass("he-htmlview-container");
+    this.iframe = null;
+    this.textarea = null;
+    const toolbar = container.createDiv({ cls: "he-view-toolbar" });
+    const toggle = toolbar.createEl("button", {
+      cls: "he-view-toggle",
+      text: this.mode === "preview" ? "\u270F\uFE0F Edit" : "\u{1F441} Preview"
+    });
+    toggle.addEventListener("click", () => void this.toggleMode());
+    const save = toolbar.createEl("button", {
+      cls: "he-view-save",
+      text: "\u{1F4BE} Save (Ctrl+S)"
+    });
+    save.hidden = this.mode !== "edit";
+    save.addEventListener("click", () => void this.saveFile());
+    if (this.mode === "edit") {
+      await this.loadEditor();
+    } else {
+      await this.loadContent();
+    }
+  }
+  async toggleMode() {
+    if (this.mode === "edit" && this.dirty) {
+      if (!window.confirm("Discard unsaved changes and switch to preview?"))
+        return;
+    }
+    this.dirty = false;
+    this.mode = this.mode === "preview" ? "edit" : "preview";
+    await this.render();
+  }
+  async saveFile() {
+    if (!this.file || !this.textarea)
+      return;
+    const newText = this.textarea.value;
+    const current = await this.app.vault.read(this.file);
+    if (newText === current) {
+      this.dirty = false;
+      return;
+    }
+    await this.app.vault.modify(this.file, newText);
+    this.dirty = false;
+    new import_obsidian.Notice("Saved: " + this.file.path);
+  }
+  async loadEditor() {
+    if (!this.file)
+      return;
+    const content = await this.app.vault.read(this.file);
+    const container = this.contentEl;
+    const ta = container.ownerDocument.createElement("textarea");
+    ta.className = "he-edit-textarea";
+    ta.spellcheck = false;
+    ta.value = content;
+    ta.addEventListener("input", () => {
+      this.dirty = true;
+    });
+    ta.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        void this.saveFile();
+      }
+    });
+    container.appendChild(ta);
+    this.textarea = ta;
+    this.dirty = false;
   }
   async loadContent() {
     if (!this.file)
@@ -908,8 +983,6 @@ var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
       }
     }
     const container = this.contentEl;
-    container.empty();
-    container.addClass("he-htmlview-container");
     this.iframe = container.ownerDocument.createElement("iframe");
     this.iframe.setAttribute("sandbox", "allow-same-origin allow-scripts");
     this.iframe.setAttribute("srcdoc", content);
@@ -988,11 +1061,37 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
       if (file instanceof import_obsidian.TFile && file.extension === "html") {
         for (const view of this.views) {
           if (view.file?.path === file.path) {
+            if (view.mode === "edit")
+              continue;
             void view.setFile(file);
           }
         }
       }
     }));
+    this.addCommand({
+      id: "toggle-html-edit",
+      name: "Toggle edit/preview mode for HTML viewer",
+      checkCallback: (checking) => {
+        const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
+        if (!active)
+          return false;
+        if (!checking)
+          void active.toggleMode();
+        return true;
+      }
+    });
+    this.addCommand({
+      id: "save-html-edit",
+      name: "Save HTML file (edit mode)",
+      checkCallback: (checking) => {
+        const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
+        if (!active || active.mode !== "edit")
+          return false;
+        if (!checking)
+          void active.saveFile();
+        return true;
+      }
+    });
     this.registerMarkdownCodeBlockProcessor("html-effect", (src, el, ctx) => {
       processor(src, el, ctx, this.settings.defaultTheme);
     });
