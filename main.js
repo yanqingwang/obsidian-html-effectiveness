@@ -34,6 +34,25 @@ var DEFAULT_SETTINGS = { defaultTheme: "dark" };
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
+function isViewportLayoutPage(html) {
+  if (/<meta[^>]+name\s*=\s*["']he-no-zoom["']/i.test(html))
+    return true;
+  if (/<canvas[\s>]/i.test(html))
+    return true;
+  return /(?:^|[;{}\s>])(?:html\s*,\s*body|body|html)\s*\{[^}]*height\s*:\s*100(?:vh|%)/i.test(html);
+}
+function isChineseUI() {
+  try {
+    const lang = window.localStorage.getItem("language");
+    if (lang)
+      return lang.toLowerCase().startsWith("zh");
+  } catch {
+  }
+  return (navigator.language || "").toLowerCase().startsWith("zh");
+}
+function t(en, zh) {
+  return isChineseUI() ? zh : en;
+}
 function applyMd(parent, text) {
   const lines = text.split("\n");
   let i = 0;
@@ -719,7 +738,7 @@ function buildSlides(parent, content) {
   }
   showSlide(0);
   const help = parent.createDiv({ cls: "he-slides-help" });
-  help.createSpan({ text: "\u2190 \u2192 or Space: navigate \xB7 f: fullscreen \xB7 Home/End: first/last" });
+  help.createSpan({ text: t("\u2190 \u2192 or Space: navigate \xB7 f: fullscreen \xB7 Home/End: first/last", "\u2190 \u2192 \u6216\u7A7A\u683C\uFF1A\u7FFB\u9875 \xB7 f\uFF1A\u5168\u5C4F \xB7 Home/End\uFF1A\u9996/\u5C3E\u9875") });
 }
 function chr(c) {
   return String.fromCharCode(c);
@@ -741,9 +760,9 @@ function processor(source, el, _ctx, defaultTheme) {
             if (parsed.theme === "light")
               theme = "light";
             if (typeof parsed.type === "string") {
-              const t = parsed.type;
-              if (t === "compare" || t === "timeline" || t === "diagram" || t === "report" || t === "slides")
-                type = t;
+              const t2 = parsed.type;
+              if (t2 === "compare" || t2 === "timeline" || t2 === "diagram" || t2 === "report" || t2 === "slides")
+                type = t2;
             }
           }
         } catch {
@@ -751,9 +770,9 @@ function processor(source, el, _ctx, defaultTheme) {
         content = source.substring(end + 3).trim();
       }
     } else {
-      const t = fl.toLowerCase();
-      if (t === "compare" || t === "timeline" || t === "diagram" || t === "report" || t === "slides") {
-        type = t;
+      const t2 = fl.toLowerCase();
+      if (t2 === "compare" || t2 === "timeline" || t2 === "diagram" || t2 === "report" || t2 === "slides") {
+        type = t2;
         content = source.substring(nl + 1).trim();
       }
     }
@@ -780,7 +799,7 @@ function processor(source, el, _ctx, defaultTheme) {
 async function exportNoteAsHTML(app, plugin) {
   const file = app.workspace.getActiveFile();
   if (!file) {
-    new import_obsidian.Notice("No active note");
+    new import_obsidian.Notice(t("No active note", "\u5F53\u524D\u6CA1\u6709\u6253\u5F00\u7684\u6587\u4EF6"));
     return;
   }
   const content = await app.vault.read(file);
@@ -791,7 +810,7 @@ async function exportNoteAsHTML(app, plugin) {
   const htmlDoc = buildStandaloneHtml(bodyHtml, title);
   const outPath = (file.parent ? file.parent.path + "/" : "") + title + ".html";
   await app.vault.create(outPath, htmlDoc);
-  new import_obsidian.Notice("Exported: " + outPath);
+  new import_obsidian.Notice(t("Exported: ", "\u5DF2\u5BFC\u51FA\uFF1A") + outPath);
 }
 function buildStandaloneHtml(bodyHtml, title) {
   return `<!DOCTYPE html>
@@ -895,12 +914,12 @@ var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
     const toolbar = container.createDiv({ cls: "he-view-toolbar" });
     const toggle = toolbar.createEl("button", {
       cls: "he-view-toggle",
-      text: this.mode === "preview" ? "\u270F\uFE0F Edit" : "\u{1F441} Preview"
+      text: this.mode === "preview" ? t("\u270F\uFE0F Edit", "\u270F\uFE0F \u7F16\u8F91") : t("\u{1F441} Preview", "\u{1F441} \u9884\u89C8")
     });
     toggle.addEventListener("click", () => void this.toggleMode());
     const save = toolbar.createEl("button", {
       cls: "he-view-save",
-      text: "\u{1F4BE} Save (Ctrl+S)"
+      text: t("\u{1F4BE} Save (Ctrl+S)", "\u{1F4BE} \u4FDD\u5B58\uFF08Ctrl+S\uFF09")
     });
     save.hidden = this.mode !== "edit";
     save.addEventListener("click", () => void this.saveFile());
@@ -912,7 +931,7 @@ var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
   }
   async toggleMode() {
     if (this.mode === "edit" && this.dirty) {
-      if (!window.confirm("Discard unsaved changes and switch to preview?"))
+      if (!window.confirm(t("Discard unsaved changes and switch to preview?", "\u653E\u5F03\u672A\u4FDD\u5B58\u7684\u4FEE\u6539\u5E76\u5207\u6362\u5230\u9884\u89C8\uFF1F")))
         return;
     }
     this.dirty = false;
@@ -930,7 +949,7 @@ var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
     }
     await this.app.vault.modify(this.file, newText);
     this.dirty = false;
-    new import_obsidian.Notice("Saved: " + this.file.path);
+    new import_obsidian.Notice(t("Saved: ", "\u5DF2\u4FDD\u5B58\uFF1A") + this.file.path);
   }
   async loadEditor() {
     if (!this.file)
@@ -971,7 +990,7 @@ var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
         return _match;
       }
     });
-    if (!content.includes("zoom-bar")) {
+    if (!content.includes("zoom-bar") && !isViewportLayoutPage(content)) {
       const zoomHtml = `<style>.zoom-container{transform-origin:top left}.zoom-bar{position:fixed;bottom:24px;right:24px;display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--he-white,#fff);border:1px solid var(--he-gray-300,#d1cfc5);border-radius:12px;box-shadow:0 4px 10px rgba(20,20,19,.08);z-index:999;user-select:none;opacity:.7;transition:opacity .2s}.zoom-bar:hover{opacity:1}.zoom-btn{display:grid;place-items:center;width:28px;height:28px;border:none;background:0 0;border-radius:4px;cursor:pointer;font-size:16px;color:var(--he-slate,#141413);transition:background .1s;line-height:1}.zoom-btn:hover{background:var(--he-gray-100,#f0eee6)}.zoom-level{min-width:40px;text-align:center;font-family:ui-monospace,monospace;font-size:12px;color:var(--he-gray-500,#87867f)}</style>
 <script>(function(){var MIN=.3,MAX=3,STEP=.1,zoom=1;function apply(){var c=document.querySelector('.zoom-container');if(!c)return;c.style.transform='scale('+zoom+')';c.style.transformOrigin='top left';c.style.width=(100/zoom)+'%';var el=document.querySelector('.zoom-level');if(el)el.textContent=Math.round(zoom*100)+'%'}var nw=document.body.scrollWidth||1;if(!document.querySelector('.zoom-bar')){var w=document.createElement('div');w.className='zoom-container';while(document.body.firstChild)w.appendChild(document.body.firstChild);document.body.appendChild(w);var vw=window.innerWidth||document.documentElement.clientWidth||1;zoom=Math.max(MIN,Math.min(1,vw/nw));var b=document.createElement('div');b.className='zoom-bar';b.innerHTML='<button class="zoom-btn" id="zo">\u2212</button><span class="zoom-level">'+Math.round(zoom*100)+'%</span><button class="zoom-btn" id="zi">+</button><button class="zoom-btn" id="zr">\u27F2</button>';document.body.appendChild(b);document.getElementById('zi').onclick=function(){zoom=Math.min(MAX,zoom+STEP);apply()};document.getElementById('zo').onclick=function(){zoom=Math.max(MIN,zoom-STEP);apply()};document.getElementById('zr').onclick=function(){zoom=1;apply()};document.addEventListener('wheel',function(e){if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoom=Math.max(MIN,Math.min(MAX,zoom-e.deltaY*.002));apply()},{passive:false});document.addEventListener('keydown',function(e){if(!e.ctrlKey&&!e.metaKey)return;if(e.key==='='||e.key==='+'){e.preventDefault();zoom=Math.min(MAX,zoom+STEP);apply()}else if(e.key==='-'){e.preventDefault();zoom=Math.max(MIN,zoom-STEP);apply()}else if(e.key==='0'){e.preventDefault();zoom=1;apply()}})}apply()})();
 <\/script>`;
@@ -1022,7 +1041,7 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
       if (file instanceof import_obsidian.TFile && file.extension === "html") {
         menu.addItem((item) => {
-          item.setTitle("Open with HTML Effectiveness").setIcon("eye").onClick(async () => {
+          item.setTitle(t("Open with HTML Effectiveness", "\u7528 HTML Effectiveness \u6253\u5F00")).setIcon("eye").onClick(async () => {
             if (revealExisting(file.path))
               return;
             const leaf = this.app.workspace.getLeaf(true);
@@ -1036,7 +1055,7 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
     }));
     this.addCommand({
       id: "open-html-view",
-      name: "Open current file in HTML viewer",
+      name: t("Open current file in HTML viewer", "\u7528 HTML \u67E5\u770B\u5668\u6253\u5F00\u5F53\u524D\u6587\u4EF6"),
       checkCallback: (checking) => {
         const f = this.app.workspace.getActiveFile();
         if (f?.extension === "html") {
@@ -1070,7 +1089,7 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
     }));
     this.addCommand({
       id: "toggle-html-edit",
-      name: "Toggle edit/preview mode for HTML viewer",
+      name: t("Toggle edit/preview mode for HTML viewer", "\u5207\u6362 HTML \u67E5\u770B\u5668\u7684\u7F16\u8F91/\u9884\u89C8\u6A21\u5F0F"),
       checkCallback: (checking) => {
         const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
         if (!active)
@@ -1082,7 +1101,7 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
     });
     this.addCommand({
       id: "save-html-edit",
-      name: "Save HTML file (edit mode)",
+      name: t("Save HTML file (edit mode)", "\u4FDD\u5B58 HTML \u6587\u4EF6\uFF08\u7F16\u8F91\u6A21\u5F0F\uFF09"),
       checkCallback: (checking) => {
         const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
         if (!active || active.mode !== "edit")
@@ -1095,12 +1114,12 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
     this.registerMarkdownCodeBlockProcessor("html-effect", (src, el, ctx) => {
       processor(src, el, ctx, this.settings.defaultTheme);
     });
-    this.addCommand({ id: "export-note", name: "Export note as HTML", callback: () => exportNoteAsHTML(this.app, this) });
-    this.addCommand({ id: "compare", name: "Compare", editorCallback: (e) => e.replaceSelection("```html-effect\ncompare\n\nLeft\n---\nRight\n```") });
-    this.addCommand({ id: "timeline", name: "Timeline", editorCallback: (e) => e.replaceSelection("```html-effect\ntimeline\n\n- [2026-01] Event\n- [2026-06] Another\n```") });
-    this.addCommand({ id: "report", name: "Report", editorCallback: (e) => e.replaceSelection("```html-effect\n---\ntype: report\n---\n## \n- 85%: Rate\n\n# Title\nContent\n```") });
-    this.addCommand({ id: "slides", name: "Slides", editorCallback: (e) => e.replaceSelection("```html-effect\nslides\n\n# One\nContent\n---\n# Two\nContent\n```") });
-    this.addCommand({ id: "diagram", name: "Diagram", editorCallback: (e) => e.replaceSelection("```html-effect\ndiagram\n\n\xE2\x94\x8C\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x90\n\xE2\x94\x82App\xE2\x94\x82\n\xE2\x94\x94\xE2\x94\xAC\xE2\x94\x80\xE2\x94\x98\n  \xE2\x96\xBC\n\xE2\x94\x8C\xE2\x94\x80\xE2\x94\x80\xE2\x94\x90\n\xE2\x94\x82DB\xE2\x94\x82\n\xE2\x94\x94\xE2\x94\x80\xE2\x94\x80\xE2\x94\x98\n```") });
+    this.addCommand({ id: "export-note", name: t("Export note as HTML", "\u5C06\u7B14\u8BB0\u5BFC\u51FA\u4E3A HTML"), callback: () => exportNoteAsHTML(this.app, this) });
+    this.addCommand({ id: "compare", name: t("Compare", "\u5BF9\u6BD4"), editorCallback: (e) => e.replaceSelection("```html-effect\ncompare\n\nLeft\n---\nRight\n```") });
+    this.addCommand({ id: "timeline", name: t("Timeline", "\u65F6\u95F4\u7EBF"), editorCallback: (e) => e.replaceSelection("```html-effect\ntimeline\n\n- [2026-01] Event\n- [2026-06] Another\n```") });
+    this.addCommand({ id: "report", name: t("Report", "\u62A5\u544A"), editorCallback: (e) => e.replaceSelection("```html-effect\n---\ntype: report\n---\n## \n- 85%: Rate\n\n# Title\nContent\n```") });
+    this.addCommand({ id: "slides", name: t("Slides", "\u5E7B\u706F\u7247"), editorCallback: (e) => e.replaceSelection("```html-effect\nslides\n\n# One\nContent\n---\n# Two\nContent\n```") });
+    this.addCommand({ id: "diagram", name: t("Diagram", "\u56FE\u793A"), editorCallback: (e) => e.replaceSelection("```html-effect\ndiagram\n\n\xE2\x94\x8C\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x90\n\xE2\x94\x82App\xE2\x94\x82\n\xE2\x94\x94\xE2\x94\xAC\xE2\x94\x80\xE2\x94\x98\n  \xE2\x96\xBC\n\xE2\x94\x8C\xE2\x94\x80\xE2\x94\x80\xE2\x94\x90\n\xE2\x94\x82DB\xE2\x94\x82\n\xE2\x94\x94\xE2\x94\x80\xE2\x94\x80\xE2\x94\x98\n```") });
     this.addSettingTab(new HESettingTab(this.app, this));
   }
   async loadSettings() {
@@ -1122,8 +1141,8 @@ var HESettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian.Setting(containerEl).setName("Display").setHeading();
-    new import_obsidian.Setting(containerEl).setName("Default theme").setDesc("Theme for rendered blocks").addDropdown((d) => d.addOption("dark", "Dark").addOption("light", "Light").setValue(this.plugin.settings.defaultTheme).onChange(async (v) => {
+    new import_obsidian.Setting(containerEl).setName(t("Display", "\u663E\u793A")).setHeading();
+    new import_obsidian.Setting(containerEl).setName(t("Default theme", "\u9ED8\u8BA4\u4E3B\u9898")).setDesc(t("Theme for rendered blocks", "\u4EE3\u7801\u5757\u6E32\u67D3\u65F6\u4F7F\u7528\u7684\u4E3B\u9898")).addDropdown((d) => d.addOption("dark", t("Dark", "\u6DF1\u8272")).addOption("light", t("Light", "\u6D45\u8272")).setValue(this.plugin.settings.defaultTheme).onChange(async (v) => {
       this.plugin.settings.defaultTheme = v;
       await this.plugin.saveSettings();
     }));

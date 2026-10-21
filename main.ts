@@ -10,7 +10,47 @@ const DEFAULT_SETTINGS: HESettings = { defaultTheme: 'dark' };
 type TemplateType = 'compare' | 'timeline' | 'diagram' | 'report' | 'slides';
 
 function escapeHtml(s: string): string {
-	return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/**
+ * True when the page lays itself out against the viewport, in which case the zoom
+ * wrapper must not be injected.
+ *
+ * The wrapper moves every body child into a content-sized `.zoom-container` and
+ * scales it. That is fine for static reports, but a viewport-layout page loses its
+ * containing block: percentage heights collapse, a canvas is re-measured from its
+ * own aspect ratio, and pointer hit-testing (clientWidth/clientHeight vs
+ * getBoundingClientRect) lands off target, so clicks select the wrong node.
+ *
+ * Detected cases:
+ *   - `<canvas>`: interactive canvas apps size themselves to the frame.
+ *   - html/body with `height: 100%` or `100vh`: full-viewport layout.
+ *   - `<meta name="he-no-zoom">`: explicit opt-out for anything else.
+ */
+function isViewportLayoutPage(html: string): boolean {
+        if (/<meta[^>]+name\s*=\s*["']he-no-zoom["']/i.test(html)) return true;
+        if (/<canvas[\s>]/i.test(html)) return true;
+        return /(?:^|[;{}\s>])(?:html\s*,\s*body|body|html)\s*\{[^}]*height\s*:\s*100(?:vh|%)/i.test(html);
+}
+
+/**
+ * Obsidian stores the UI language in localStorage under `language` (e.g. `zh`, `en`).
+ * Read it directly so the plugin follows the app language without an extra setting.
+ */
+function isChineseUI(): boolean {
+        try {
+                const lang = window.localStorage.getItem('language');
+                if (lang) return lang.toLowerCase().startsWith('zh');
+        } catch {
+                // localStorage unavailable — fall through to the system locale
+        }
+        return (navigator.language || '').toLowerCase().startsWith('zh');
+}
+
+/** Pick the Chinese string when Obsidian's UI language is Chinese, English otherwise. */
+function t(en: string, zh: string): string {
+        return isChineseUI() ? zh : en;
 }
 
 function applyMd(parent: HTMLElement, text: string): void {
@@ -782,7 +822,7 @@ function buildSlides(parent: HTMLElement, content: string): void {
 	}
 	showSlide(0);
 	const help = parent.createDiv({ cls: 'he-slides-help' });
-	help.createSpan({ text: '\u2190 \u2192 or Space: navigate \u00b7 f: fullscreen \u00b7 Home/End: first/last' });
+	help.createSpan({ text: t('\u2190 \u2192 or Space: navigate \u00b7 f: fullscreen \u00b7 Home/End: first/last', '\u2190 \u2192 或空格：翻页 \u00b7 f：全屏 \u00b7 Home/End：首/尾页') });
 }
 
 function chr(c: number): string { return String.fromCharCode(c); }
@@ -830,7 +870,7 @@ function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorC
 
 async function exportNoteAsHTML(app: App, plugin: Component): Promise<void> {
     const file = app.workspace.getActiveFile();
-    if (!file) { new Notice('No active note'); return; }
+    if (!file) { new Notice(t('No active note', '当前没有打开的文件')); return; }
     
     const content = await app.vault.read(file);
     
@@ -843,7 +883,7 @@ async function exportNoteAsHTML(app: App, plugin: Component): Promise<void> {
     const htmlDoc = buildStandaloneHtml(bodyHtml, title);
     const outPath = (file.parent ? file.parent.path + '/' : '') + title + '.html';
     await app.vault.create(outPath, htmlDoc);
-    new Notice('Exported: ' + outPath);
+    new Notice(t('Exported: ', '已导出：') + outPath);
 }
 
 function buildStandaloneHtml(bodyHtml: string, title: string): string {
@@ -959,12 +999,12 @@ class HEHTMLView extends ItemView {
 		const toolbar = container.createDiv({ cls: 'he-view-toolbar' });
 		const toggle = toolbar.createEl('button', {
 			cls: 'he-view-toggle',
-			text: this.mode === 'preview' ? '✏️ Edit' : '👁 Preview'
+			text: this.mode === 'preview' ? t('✏️ Edit', '✏️ 编辑') : t('👁 Preview', '👁 预览')
 		});
 		toggle.addEventListener('click', () => void this.toggleMode());
 		const save = toolbar.createEl('button', {
 			cls: 'he-view-save',
-			text: '💾 Save (Ctrl+S)'
+			text: t('💾 Save (Ctrl+S)', '💾 保存（Ctrl+S）')
 		});
 		save.hidden = this.mode !== 'edit';
 		save.addEventListener('click', () => void this.saveFile());
@@ -978,7 +1018,7 @@ class HEHTMLView extends ItemView {
 
 	async toggleMode(): Promise<void> {
 		if (this.mode === 'edit' && this.dirty) {
-			if (!window.confirm('Discard unsaved changes and switch to preview?')) return;
+			if (!window.confirm(t('Discard unsaved changes and switch to preview?', '放弃未保存的修改并切换到预览？'))) return;
 		}
 		this.dirty = false;
 		this.mode = this.mode === 'preview' ? 'edit' : 'preview';
@@ -995,7 +1035,7 @@ class HEHTMLView extends ItemView {
 		}
 		await this.app.vault.modify(this.file, newText);
 		this.dirty = false;
-		new Notice('Saved: ' + this.file.path);
+		new Notice(t('Saved: ', '已保存：') + this.file.path);
 	}
 
 	private async loadEditor(): Promise<void> {
@@ -1035,8 +1075,9 @@ class HEHTMLView extends ItemView {
 			}
 		});
 
-		// inject zoom controls (skip if content already has them, e.g. html-effectiveness generated)
-		if (!content.includes('zoom-bar')) {
+		// inject zoom controls (skip if content already has them, e.g. html-effectiveness generated,
+		// or if the page manages its own viewport layout — wrapping it would break canvas pointer math)
+		if (!content.includes('zoom-bar') && !isViewportLayoutPage(content)) {
 			const zoomHtml = `<style>.zoom-container{transform-origin:top left}.zoom-bar{position:fixed;bottom:24px;right:24px;display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--he-white,#fff);border:1px solid var(--he-gray-300,#d1cfc5);border-radius:12px;box-shadow:0 4px 10px rgba(20,20,19,.08);z-index:999;user-select:none;opacity:.7;transition:opacity .2s}.zoom-bar:hover{opacity:1}.zoom-btn{display:grid;place-items:center;width:28px;height:28px;border:none;background:0 0;border-radius:4px;cursor:pointer;font-size:16px;color:var(--he-slate,#141413);transition:background .1s;line-height:1}.zoom-btn:hover{background:var(--he-gray-100,#f0eee6)}.zoom-level{min-width:40px;text-align:center;font-family:ui-monospace,monospace;font-size:12px;color:var(--he-gray-500,#87867f)}</style>
 <script>(function(){var MIN=.3,MAX=3,STEP=.1,zoom=1;function apply(){var c=document.querySelector('.zoom-container');if(!c)return;c.style.transform='scale('+zoom+')';c.style.transformOrigin='top left';c.style.width=(100/zoom)+'%';var el=document.querySelector('.zoom-level');if(el)el.textContent=Math.round(zoom*100)+'%'}var nw=document.body.scrollWidth||1;if(!document.querySelector('.zoom-bar')){var w=document.createElement('div');w.className='zoom-container';while(document.body.firstChild)w.appendChild(document.body.firstChild);document.body.appendChild(w);var vw=window.innerWidth||document.documentElement.clientWidth||1;zoom=Math.max(MIN,Math.min(1,vw/nw));var b=document.createElement('div');b.className='zoom-bar';b.innerHTML='<button class="zoom-btn" id="zo">\u2212</button><span class="zoom-level">'+Math.round(zoom*100)+'%</span><button class="zoom-btn" id="zi">+</button><button class="zoom-btn" id="zr">\u27F2</button>';document.body.appendChild(b);document.getElementById('zi').onclick=function(){zoom=Math.min(MAX,zoom+STEP);apply()};document.getElementById('zo').onclick=function(){zoom=Math.max(MIN,zoom-STEP);apply()};document.getElementById('zr').onclick=function(){zoom=1;apply()};document.addEventListener('wheel',function(e){if(!e.ctrlKey&&!e.metaKey)return;e.preventDefault();zoom=Math.max(MIN,Math.min(MAX,zoom-e.deltaY*.002));apply()},{passive:false});document.addEventListener('keydown',function(e){if(!e.ctrlKey&&!e.metaKey)return;if(e.key==='='||e.key==='+'){e.preventDefault();zoom=Math.min(MAX,zoom+STEP);apply()}else if(e.key==='-'){e.preventDefault();zoom=Math.max(MIN,zoom-STEP);apply()}else if(e.key==='0'){e.preventDefault();zoom=1;apply()}})}apply()})();
 </script>`;
@@ -1092,7 +1133,7 @@ export default class HEExtPlugin extends Plugin {
 		this.registerEvent(this.app.workspace.on('file-menu', (menu, file) => {
 			if (file instanceof TFile && file.extension === 'html') {
 				menu.addItem((item) => {
-					item.setTitle('Open with HTML Effectiveness')
+					item.setTitle(t('Open with HTML Effectiveness', '用 HTML Effectiveness 打开'))
 						.setIcon('eye')
 						.onClick(async () => {
 							if (revealExisting(file.path)) return;
@@ -1108,7 +1149,7 @@ export default class HEExtPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'open-html-view',
-			name: 'Open current file in HTML viewer',
+			name: t('Open current file in HTML viewer', '用 HTML 查看器打开当前文件'),
 			checkCallback: (checking) => {
 				const f = this.app.workspace.getActiveFile();
 				if (f?.extension === 'html') {
@@ -1144,7 +1185,7 @@ export default class HEExtPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'toggle-html-edit',
-			name: 'Toggle edit/preview mode for HTML viewer',
+			name: t('Toggle edit/preview mode for HTML viewer', '切换 HTML 查看器的编辑/预览模式'),
 			checkCallback: (checking) => {
 				const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
 				if (!active) return false;
@@ -1155,7 +1196,7 @@ export default class HEExtPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'save-html-edit',
-			name: 'Save HTML file (edit mode)',
+			name: t('Save HTML file (edit mode)', '保存 HTML 文件（编辑模式）'),
 			checkCallback: (checking) => {
 				const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
 				if (!active || active.mode !== 'edit') return false;
@@ -1168,12 +1209,12 @@ export default class HEExtPlugin extends Plugin {
 			processor(src, el, ctx, this.settings.defaultTheme);
 		});
 
-		this.addCommand({ id: 'export-note', name: 'Export note as HTML', callback: () => exportNoteAsHTML(this.app, this) });
-		this.addCommand({ id: 'compare', name: 'Compare', editorCallback: (e) => e.replaceSelection('```html-effect\ncompare\n\nLeft\n---\nRight\n```') });
-		this.addCommand({ id: 'timeline', name: 'Timeline', editorCallback: (e) => e.replaceSelection('```html-effect\ntimeline\n\n- [2026-01] Event\n- [2026-06] Another\n```') });
-		this.addCommand({ id: 'report', name: 'Report', editorCallback: (e) => e.replaceSelection('```html-effect\n---\ntype: report\n---\n## \n- 85%: Rate\n\n# Title\nContent\n```') });
-		this.addCommand({ id: 'slides', name: 'Slides', editorCallback: (e) => e.replaceSelection('```html-effect\nslides\n\n# One\nContent\n---\n# Two\nContent\n```') });
-		this.addCommand({ id: 'diagram', name: 'Diagram', editorCallback: (e) => e.replaceSelection('```html-effect\ndiagram\n\n\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x90\n\xe2\x94\x82App\xe2\x94\x82\n\xe2\x94\x94\xe2\x94\xac\xe2\x94\x80\xe2\x94\x98\n  \xe2\x96\xbc\n\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x80\xe2\x94\x90\n\xe2\x94\x82DB\xe2\x94\x82\n\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80\xe2\x94\x98\n```') });
+		this.addCommand({ id: 'export-note', name: t('Export note as HTML', '将笔记导出为 HTML'), callback: () => exportNoteAsHTML(this.app, this) });
+		this.addCommand({ id: 'compare', name: t('Compare', '对比'), editorCallback: (e) => e.replaceSelection('```html-effect\ncompare\n\nLeft\n---\nRight\n```') });
+		this.addCommand({ id: 'timeline', name: t('Timeline', '时间线'), editorCallback: (e) => e.replaceSelection('```html-effect\ntimeline\n\n- [2026-01] Event\n- [2026-06] Another\n```') });
+		this.addCommand({ id: 'report', name: t('Report', '报告'), editorCallback: (e) => e.replaceSelection('```html-effect\n---\ntype: report\n---\n## \n- 85%: Rate\n\n# Title\nContent\n```') });
+		this.addCommand({ id: 'slides', name: t('Slides', '幻灯片'), editorCallback: (e) => e.replaceSelection('```html-effect\nslides\n\n# One\nContent\n---\n# Two\nContent\n```') });
+		this.addCommand({ id: 'diagram', name: t('Diagram', '图示'), editorCallback: (e) => e.replaceSelection('```html-effect\ndiagram\n\n\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x90\n\xe2\x94\x82App\xe2\x94\x82\n\xe2\x94\x94\xe2\x94\xac\xe2\x94\x80\xe2\x94\x98\n  \xe2\x96\xbc\n\xe2\x94\x8c\xe2\x94\x80\xe2\x94\x80\xe2\x94\x90\n\xe2\x94\x82DB\xe2\x94\x82\n\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80\xe2\x94\x98\n```') });
 		this.addSettingTab(new HESettingTab(this.app, this));
 	}
 
@@ -1195,9 +1236,9 @@ class HESettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		new Setting(containerEl).setName('Display').setHeading();
-		new Setting(containerEl).setName('Default theme').setDesc('Theme for rendered blocks')
-			.addDropdown(d => d.addOption('dark', 'Dark').addOption('light', 'Light')
+		new Setting(containerEl).setName(t('Display', '显示')).setHeading();
+		new Setting(containerEl).setName(t('Default theme', '默认主题')).setDesc(t('Theme for rendered blocks', '代码块渲染时使用的主题'))
+			.addDropdown(d => d.addOption('dark', t('Dark', '深色')).addOption('light', t('Light', '浅色'))
 				.setValue(this.plugin.settings.defaultTheme)
 				.onChange(async (v) => {
 					this.plugin.settings.defaultTheme = v as 'dark' | 'light';

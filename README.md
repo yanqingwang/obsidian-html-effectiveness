@@ -126,6 +126,12 @@ In the Obsidian file explorer / 在 Obsidian 文件管理器中：
 
 ## Changelog / 更新日志
 
+### 1.1.1
+
+- **Fix viewport-layout HTML / 修复自带视口布局的 HTML**: pages with a `<canvas>` or `html/body { height: 100% | 100vh }` are no longer wrapped in the zoom container, so canvas apps keep a 1:1 frame and pointer hit-testing stays accurate / 含 `<canvas>` 或 `html/body { height:100% | 100vh }` 的页面不再被包进缩放容器，画布应用保持 1:1，点击命中不再偏移
+- **Opt-out meta / 关闭缩放的开关**: add `<meta name="he-no-zoom">` to any HTML file to skip the zoom wrapper / 在任意 HTML 中加入 `<meta name="he-no-zoom">` 即可跳过缩放包装
+- **Bilingual UI / 中英文界面**: toolbar, commands, notices and settings follow Obsidian's UI language / 工具栏、命令、提示与设置页跟随 Obsidian 界面语言
+
 ### 1.1.0
 
 - **In-app editing / 应用内编辑**: edit raw HTML text directly in the viewer via a toolbar toggle; Ctrl/Cmd+S or the Save button overwrites the original file / 通过工具栏在查看器中直接编辑 HTML 源文本，Ctrl/Cmd+S 或保存按钮覆盖保存原文件
