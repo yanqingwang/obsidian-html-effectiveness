@@ -126,6 +126,11 @@ In the Obsidian file explorer / 在 Obsidian 文件管理器中：
 
 ## Changelog / 更新日志
 
+### 1.2.0
+
+- **Interactive pages actually work / 交互页面真正可用**: the preview iframe now also allows forms, modal dialogs, popups and downloads. Previously `submit()`, `alert()`/`confirm()`, `window.open()` and `<a download>` were silently blocked by the sandbox, which looked like a broken page / 预览 iframe 现允许表单、模态对话框、弹窗和下载；此前这些能力被沙箱静默拦截，看起来像页面坏了
+- **Dark-mode export / 导出支持深色模式**: the standalone HTML written by "Export as HTML" follows the reader's `prefers-color-scheme`, and its `lang` attribute matches the UI language instead of always being `zh` / 「导出为 HTML」生成的独立页面跟随系统深浅色，`lang` 属性随界面语言而不是固定为 `zh`
+
 ### 1.1.1
 
 - **Fix viewport-layout HTML / 修复自带视口布局的 HTML**: pages with a `<canvas>` or `html/body { height: 100% | 100vh }` are no longer wrapped in the zoom container, so canvas apps keep a 1:1 frame and pointer hit-testing stays accurate / 含 `<canvas>` 或 `html/body { height:100% | 100vh }` 的页面不再被包进缩放容器，画布应用保持 1:1，点击命中不再偏移

@@ -888,13 +888,15 @@ async function exportNoteAsHTML(app: App, plugin: Component): Promise<void> {
 
 function buildStandaloneHtml(bodyHtml: string, title: string): string {
     return `<!DOCTYPE html>
-<html lang="zh">
+<html lang="${isChineseUI() ? 'zh' : 'en'}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
 <title>${escapeHtml(title)}</title>
 <style>
 :root {
+  color-scheme: light dark;
   --he-clay: #D97757; --he-slate: #141413; --he-ivory: #FAF9F5; --he-oat: #E3DACC;
   --he-white: #FFFFFF; --he-gray-100: #F0EEE6; --he-gray-300: #D1CFC5;
   --he-gray-500: #87867F; --he-gray-700: #3D3D3A;
@@ -922,6 +924,14 @@ img { max-width: 100%; }
 .zoom-btn { display: grid; place-items: center; width: 28px; height: 28px; border: none; background: 0 0; border-radius: 4px; cursor: pointer; font-size: 16px; color: var(--he-slate); transition: background .1s; line-height: 1; }
 .zoom-btn:hover { background: var(--he-gray-100); }
 .zoom-level { min-width: 40px; text-align: center; font-family: var(--he-font-mono); font-size: 12px; color: var(--he-gray-500); }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --he-slate: #E8E6DF; --he-ivory: #16171A; --he-white: #1F2024;
+    --he-gray-100: #24262B; --he-gray-300: #3A3D43;
+    --he-gray-500: #8A8D94; --he-gray-700: #B4B7BE;
+    --he-clay: #E08A6A; --he-info: #7FA6D6;
+  }
+}
 </style>
 </head>
 <body>
@@ -1090,7 +1100,13 @@ class HEHTMLView extends ItemView {
 		}
 		const container = this.contentEl;
 		this.iframe = container.ownerDocument.createElement('iframe');
-		this.iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts');
+		// allow-forms / allow-modals / allow-popups / allow-downloads matter for interactive
+		// pages: without them Sandbox silently drops submit(), alert()/confirm(), window.open()
+		// and <a download>, which looks like the page is broken.
+		this.iframe.setAttribute(
+			'sandbox',
+			'allow-same-origin allow-scripts allow-forms allow-modals allow-popups allow-downloads',
+		);
 		this.iframe.setAttribute('srcdoc', content);
 		this.iframe.className = 'he-htmlview-iframe';
 		container.appendChild(this.iframe);
