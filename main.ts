@@ -1,16 +1,31 @@
-import { App, Plugin, PluginSettingTab, Setting, MarkdownPostProcessorContext, parseYaml, Notice, ItemView, WorkspaceLeaf, TFile, MarkdownRenderer, Component } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, MarkdownPostProcessorContext, parseYaml, Notice, ItemView, WorkspaceLeaf, TFile, MarkdownRenderer, Component, Modal, getLanguage, type SettingDefinitionItem } from 'obsidian';
 
 const VIEW_TYPE = 'html-effectiveness-view';
 
+type OutputTheme = 'dark' | 'light';
+type ThemeSetting = OutputTheme | 'auto';
 interface HESettings {
-	defaultTheme: 'dark' | 'light';
+	defaultTheme: ThemeSetting;
 }
-const DEFAULT_SETTINGS: HESettings = { defaultTheme: 'dark' };
+const DEFAULT_SETTINGS: HESettings = { defaultTheme: 'auto' };
+
+function resolveTheme(theme: ThemeSetting, isDark = document.body.classList.contains('theme-dark')): OutputTheme {
+	if (theme === 'auto') return isDark ? 'dark' : 'light';
+	return theme;
+}
 
 type TemplateType = 'compare' | 'timeline' | 'diagram' | 'report' | 'slides';
 
 function escapeHtml(s: string): string {
         return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function parseJson<T>(value: string): T | null {
+        try {
+                return JSON.parse(value) as T;
+        } catch {
+                return null;
+        }
 }
 
 /**
@@ -34,18 +49,10 @@ function isViewportLayoutPage(html: string): boolean {
         return /(?:^|[;{}\s>])(?:html\s*,\s*body|body|html)\s*\{[^}]*height\s*:\s*100(?:vh|%)/i.test(html);
 }
 
-/**
- * Obsidian stores the UI language in localStorage under `language` (e.g. `zh`, `en`).
- * Read it directly so the plugin follows the app language without an extra setting.
- */
+/** Follow Obsidian's configured UI language when available. */
 function isChineseUI(): boolean {
-        try {
-                const lang = window.localStorage.getItem('language');
-                if (lang) return lang.toLowerCase().startsWith('zh');
-        } catch {
-                // localStorage unavailable — fall through to the system locale
-        }
-        return (navigator.language || '').toLowerCase().startsWith('zh');
+        const lang = typeof getLanguage === 'function' ? getLanguage() : navigator.language;
+        return (lang || '').toLowerCase().startsWith('zh');
 }
 
 /** Pick the Chinese string when Obsidian's UI language is Chinese, English otherwise. */
@@ -215,13 +222,13 @@ function applyInline(parent: HTMLElement, text: string): void {
 				parent.createEl('del', { text: part.content });
 				break;
 			case 'link': {
-				const data: { text: string; url: string } = JSON.parse(part.content);
-				parent.createEl('a', { text: data.text, href: data.url });
+				const data = parseJson<{ text: string; url: string }>(part.content);
+				if (data) parent.createEl('a', { text: data.text, href: data.url });
 				break;
 			}
 			case 'image': {
-				const data: { src: string; alt: string } = JSON.parse(part.content);
-				parent.createEl('img', { attr: { src: data.src, alt: data.alt } });
+				const data = parseJson<{ src: string; alt: string }>(part.content);
+				if (data) parent.createEl('img', { attr: { src: data.src, alt: data.alt } });
 				break;
 			}
 		}
@@ -827,9 +834,9 @@ function buildSlides(parent: HTMLElement, content: string): void {
 
 function chr(c: number): string { return String.fromCharCode(c); }
 
-function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorContext, defaultTheme: string): void {
+function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorContext, defaultTheme: OutputTheme): void {
 	let type: TemplateType = 'report';
-	let theme = defaultTheme === 'light' ? 'light' : 'dark';
+	let theme: OutputTheme = defaultTheme;
 	let content = source;
 	const nl = source.indexOf('\n');
 	if (nl > 0) {
@@ -841,7 +848,8 @@ function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorC
 				try {
 					const parsed: Record<string, unknown> | null = parseYaml(yml) as Record<string, unknown> | null;
 					if (parsed && typeof parsed === 'object') {
-						if (parsed.theme === 'light') theme = 'light';
+						if (parsed.theme === 'light' || parsed.theme === 'dark') theme = parsed.theme;
+						else if (parsed.theme === 'auto') theme = resolveTheme('auto');
 						if (typeof parsed.type === 'string') {
 							const t: string = parsed.type;
 							if (t === 'compare' || t === 'timeline' || t === 'diagram' || t === 'report' || t === 'slides') type = t;
@@ -868,7 +876,7 @@ function processor(source: string, el: HTMLElement, _ctx: MarkdownPostProcessorC
 	}
 }
 
-async function exportNoteAsHTML(app: App, plugin: Component): Promise<void> {
+async function exportNoteAsHTML(app: App, plugin: Component, themeSetting: ThemeSetting): Promise<void> {
     const file = app.workspace.getActiveFile();
     if (!file) { new Notice(t('No active note', '当前没有打开的文件')); return; }
     
@@ -880,29 +888,30 @@ async function exportNoteAsHTML(app: App, plugin: Component): Promise<void> {
     const bodyHtml = tempEl.innerHTML;
     
     const title = file.basename;
-    const htmlDoc = buildStandaloneHtml(bodyHtml, title);
+    const htmlDoc = buildStandaloneHtml(bodyHtml, title, resolveTheme(themeSetting));
     const outPath = (file.parent ? file.parent.path + '/' : '') + title + '.html';
     await app.vault.create(outPath, htmlDoc);
     new Notice(t('Exported: ', '已导出：') + outPath);
 }
 
-function buildStandaloneHtml(bodyHtml: string, title: string): string {
+function buildStandaloneHtml(bodyHtml: string, title: string, theme: OutputTheme): string {
     return `<!DOCTYPE html>
 <html lang="${isChineseUI() ? 'zh' : 'en'}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="${theme}">
 <title>${escapeHtml(title)}</title>
 <style>
 :root {
-  color-scheme: light dark;
+  color-scheme: ${theme};
   --he-clay: #D97757; --he-slate: #141413; --he-ivory: #FAF9F5; --he-oat: #E3DACC;
   --he-white: #FFFFFF; --he-gray-100: #F0EEE6; --he-gray-300: #D1CFC5;
   --he-gray-500: #87867F; --he-gray-700: #3D3D3A;
   --he-success: #788C5D; --he-warning: #C78E3F; --he-danger: #B04A4A; --he-info: #5C7CA3;
   --he-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --he-font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  ${theme === 'dark' ? '--he-clay: #E08A6A; --he-slate: #E8E6DF; --he-ivory: #16171A; --he-white: #1F2024; --he-gray-100: #24262B; --he-gray-300: #3A3D43; --he-gray-500: #8A8D94; --he-gray-700: #B4B7BE; --he-info: #7FA6D6;' : ''}
 }
 body { font-family: var(--he-font-sans); font-size: 16px; line-height: 1.6;
        color: var(--he-slate); background: var(--he-ivory); max-width: 880px;
@@ -924,14 +933,6 @@ img { max-width: 100%; }
 .zoom-btn { display: grid; place-items: center; width: 28px; height: 28px; border: none; background: 0 0; border-radius: 4px; cursor: pointer; font-size: 16px; color: var(--he-slate); transition: background .1s; line-height: 1; }
 .zoom-btn:hover { background: var(--he-gray-100); }
 .zoom-level { min-width: 40px; text-align: center; font-family: var(--he-font-mono); font-size: 12px; color: var(--he-gray-500); }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --he-slate: #E8E6DF; --he-ivory: #16171A; --he-white: #1F2024;
-    --he-gray-100: #24262B; --he-gray-300: #3A3D43;
-    --he-gray-500: #8A8D94; --he-gray-700: #B4B7BE;
-    --he-clay: #E08A6A; --he-info: #7FA6D6;
-  }
-}
 </style>
 </head>
 <body>
@@ -943,6 +944,48 @@ ${bodyHtml}
 </script>
 </body>
 </html>`;
+}
+
+class ConfirmModal extends Modal {
+	private resolved = false;
+
+	constructor(app: App, private message: string, private onResult: (value: boolean) => void) {
+		super(app);
+	}
+
+	onOpen(): void {
+		this.titleEl.setText(t('Unsaved changes', '未保存的修改'));
+		this.contentEl.createEl('p', { text: this.message });
+		new Setting(this.contentEl)
+			.addButton(button => button
+				.setButtonText(t('Cancel', '取消'))
+				.onClick(() => this.finish(false)))
+			.addButton(button => button
+				.setButtonText(t('Discard changes', '放弃修改'))
+				.setWarning()
+				.onClick(() => this.finish(true)));
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+		if (!this.resolved) {
+			this.resolved = true;
+			this.onResult(false);
+		}
+	}
+
+	private finish(value: boolean): void {
+		if (this.resolved) return;
+		this.resolved = true;
+		this.onResult(value);
+		this.close();
+	}
+}
+
+function confirmDiscardChanges(app: App): Promise<boolean> {
+	return new Promise(resolve => {
+		new ConfirmModal(app, t('Discard unsaved changes and switch to preview?', '放弃未保存的修改并切换到预览？'), resolve).open();
+	});
 }
 
 class HEHTMLView extends ItemView {
@@ -1028,7 +1071,7 @@ class HEHTMLView extends ItemView {
 
 	async toggleMode(): Promise<void> {
 		if (this.mode === 'edit' && this.dirty) {
-			if (!window.confirm(t('Discard unsaved changes and switch to preview?', '放弃未保存的修改并切换到预览？'))) return;
+			if (!(await confirmDiscardChanges(this.app))) return;
 		}
 		this.dirty = false;
 		this.mode = this.mode === 'preview' ? 'edit' : 'preview';
@@ -1052,8 +1095,7 @@ class HEHTMLView extends ItemView {
 		if (!this.file) return;
 		const content = await this.app.vault.read(this.file);
 		const container = this.contentEl;
-		const ta = container.ownerDocument.createElement('textarea');
-		ta.className = 'he-edit-textarea';
+		const ta = container.createEl('textarea', { cls: 'he-edit-textarea' });
 		ta.spellcheck = false;
 		ta.value = content;
 		ta.addEventListener('input', () => { this.dirty = true; });
@@ -1063,7 +1105,6 @@ class HEHTMLView extends ItemView {
 				void this.saveFile();
 			}
 		});
-		container.appendChild(ta);
 		this.textarea = ta;
 		this.dirty = false;
 	}
@@ -1078,7 +1119,7 @@ class HEHTMLView extends ItemView {
 			}
 			const fullPath: string = parentPath ? parentPath + '/' + url : url;
 			try {
-				const resourceUrl = this.app.vault.adapter!.getResourcePath(fullPath);
+				const resourceUrl = this.app.vault.adapter.getResourcePath(fullPath);
 				return attr + '="' + resourceUrl + '"';
 			} catch {
 				return _match;
@@ -1099,7 +1140,7 @@ class HEHTMLView extends ItemView {
 			}
 		}
 		const container = this.contentEl;
-		this.iframe = container.ownerDocument.createElement('iframe');
+		this.iframe = container.createEl('iframe', { cls: 'he-htmlview-iframe' });
 		// allow-forms / allow-modals / allow-popups / allow-downloads matter for interactive
 		// pages: without them Sandbox silently drops submit(), alert()/confirm(), window.open()
 		// and <a download>, which looks like the page is broken.
@@ -1108,8 +1149,6 @@ class HEHTMLView extends ItemView {
 			'allow-same-origin allow-scripts allow-forms allow-modals allow-popups allow-downloads',
 		);
 		this.iframe.setAttribute('srcdoc', content);
-		this.iframe.className = 'he-htmlview-iframe';
-		container.appendChild(this.iframe);
 	}
 
 	async onOpen(): Promise<void> {
@@ -1122,7 +1161,7 @@ class HEHTMLView extends ItemView {
 }
 
 export default class HEExtPlugin extends Plugin {
-	settings: HESettings = DEFAULT_SETTINGS;
+	settings: HESettings = { ...DEFAULT_SETTINGS };
 	views: HEHTMLView[] = [];
 
 	async onload(): Promise<void> {
@@ -1222,10 +1261,10 @@ export default class HEExtPlugin extends Plugin {
 		});
 
 		this.registerMarkdownCodeBlockProcessor('html-effect', (src, el, ctx) => {
-			processor(src, el, ctx, this.settings.defaultTheme);
+			processor(src, el, ctx, resolveTheme(this.settings.defaultTheme));
 		});
 
-		this.addCommand({ id: 'export-note', name: t('Export note as HTML', '将笔记导出为 HTML'), callback: () => exportNoteAsHTML(this.app, this) });
+		this.addCommand({ id: 'export-note', name: t('Export note as HTML', '将笔记导出为 HTML'), callback: () => exportNoteAsHTML(this.app, this, this.settings.defaultTheme) });
 		this.addCommand({ id: 'compare', name: t('Compare', '对比'), editorCallback: (e) => e.replaceSelection('```html-effect\ncompare\n\nLeft\n---\nRight\n```') });
 		this.addCommand({ id: 'timeline', name: t('Timeline', '时间线'), editorCallback: (e) => e.replaceSelection('```html-effect\ntimeline\n\n- [2026-01] Event\n- [2026-06] Another\n```') });
 		this.addCommand({ id: 'report', name: t('Report', '报告'), editorCallback: (e) => e.replaceSelection('```html-effect\n---\ntype: report\n---\n## \n- 85%: Rate\n\n# Title\nContent\n```') });
@@ -1237,13 +1276,28 @@ export default class HEExtPlugin extends Plugin {
 	async loadSettings(): Promise<void> {
 		const data: Record<string, unknown> | null = await this.loadData() as Record<string, unknown> | null;
 		if (data) {
-			if (data.defaultTheme === 'light') this.settings.defaultTheme = 'light';
+			const theme = data.defaultTheme;
+			if (theme === 'auto' || theme === 'light' || theme === 'dark') this.settings.defaultTheme = theme;
 		}
 	}
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 	}
+}
+
+export { buildStandaloneHtml, resolveTheme };
+
+function themeSettingOptions(): Record<string, string> {
+	return {
+		auto: t('Auto (follow Obsidian)', '自动（跟随 Obsidian）'),
+		dark: t('Dark', '深色'),
+		light: t('Light', '浅色'),
+	};
+}
+
+function themeSettingDescription(): string {
+	return t('Theme for rendered blocks and exported HTML. Auto follows the Obsidian theme at render or export time.', '渲染块和导出 HTML 使用的主题。自动模式在渲染或导出时跟随 Obsidian 当前主题。');
 }
 
 class HESettingTab extends PluginSettingTab {
@@ -1253,12 +1307,42 @@ class HESettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 		new Setting(containerEl).setName(t('Display', '显示')).setHeading();
-		new Setting(containerEl).setName(t('Default theme', '默认主题')).setDesc(t('Theme for rendered blocks', '代码块渲染时使用的主题'))
-			.addDropdown(d => d.addOption('dark', t('Dark', '深色')).addOption('light', t('Light', '浅色'))
-				.setValue(this.plugin.settings.defaultTheme)
-				.onChange(async (v) => {
-					this.plugin.settings.defaultTheme = v as 'dark' | 'light';
-					await this.plugin.saveSettings();
-				}));
+		new Setting(containerEl).setName(t('Default theme', '默认主题')).setDesc(themeSettingDescription())
+			.addDropdown(d => {
+				for (const [value, label] of Object.entries(themeSettingOptions())) d.addOption(value, label);
+				d.setValue(this.plugin.settings.defaultTheme)
+					.onChange(async (v) => {
+						await this.setControlValue('defaultTheme', v);
+					});
+			});
+	}
+
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [{
+			type: 'group',
+			heading: t('Display', '显示'),
+			items: [{
+				name: t('Default theme', '默认主题'),
+				desc: themeSettingDescription(),
+				control: {
+					type: 'dropdown',
+					key: 'defaultTheme',
+					defaultValue: 'auto',
+					options: themeSettingOptions(),
+				},
+			}],
+		}];
+	}
+
+	getControlValue(key: string): unknown {
+		return key === 'defaultTheme' ? this.plugin.settings.defaultTheme : undefined;
+	}
+
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		if (key !== 'defaultTheme') return;
+		if (value === 'auto' || value === 'dark' || value === 'light') {
+			this.plugin.settings.defaultTheme = value;
+			await this.plugin.saveSettings();
+		}
 	}
 }

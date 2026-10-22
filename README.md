@@ -55,9 +55,9 @@ Open `.html` files directly in Obsidian with full rendering / 在 Obsidian 中�
 
 ### More / 其他
 
-- **Export note**: the "Export note as HTML" command exports the current note to a standalone HTML file / 导出笔记："Export note as HTML" 命令将当前笔记导出为独立 HTML 文件
+- **Export note**: the "Export note as HTML" command exports the current note to a standalone HTML file using the selected theme / 导出笔记："Export note as HTML" 命令使用所选主题将当前笔记导出为独立 HTML 文件
 - **Insert templates**: 6 quick commands insert common template code blocks / 插入模板：6 个快捷命令插入常用模板代码块
-- **Theme adaptation**: light/dark theme switching follows the Obsidian theme / 主题适配：浅色/深色主题切换，跟随 Obsidian 主题
+- **Theme setting**: Auto (follows the current Obsidian theme), Dark, or Light for rendered blocks and exported HTML / 主题设置：自动（跟随当前 Obsidian 主题）、深色或浅色，适用于渲染块和导出的 HTML
 
 ---
 
