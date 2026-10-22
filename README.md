@@ -155,6 +155,8 @@ In the Obsidian file explorer / 在 Obsidian 文件管理器中：
 
 ## Installation / 安装
 
+**Requires Obsidian 1.8.7 or later. / 需要 Obsidian 1.8.7 或更高版本。**
+
 ### From Obsidian Community Plugins / 从 Obsidian 社区插件安装
 
 Settings → Community Plugins → Browse → Search "HTML Effectiveness"

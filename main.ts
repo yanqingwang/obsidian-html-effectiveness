@@ -199,7 +199,7 @@ function applyInline(parent: HTMLElement, text: string): void {
 
 	// If no matches, just set text content
 	if (parts.length === 0) {
-		parent.appendChild(parent.ownerDocument.createTextNode(escaped));
+		parent.appendText(escaped);
 		return;
 	}
 
@@ -207,7 +207,7 @@ function applyInline(parent: HTMLElement, text: string): void {
 	for (const part of parts) {
 		switch (part.type) {
 			case 'text':
-				parent.appendChild(parent.ownerDocument.createTextNode(part.content));
+				parent.appendText(part.content);
 				break;
 			case 'bold':
 				parent.createEl('strong', { text: part.content });
@@ -377,7 +377,7 @@ function buildCompare(parent: HTMLElement, content: string, theme: string): void
 		if (col.metrics.length > 0) {
 			const footer = card.createEl('footer', { cls: 'he-metrics' });
 			for (const mLine of col.metrics) {
-				const span = footer.createEl('span');
+				const span = footer.createSpan();
 				applyInline(span, mLine);
 			}
 		}
@@ -387,7 +387,7 @@ function buildCompare(parent: HTMLElement, content: string, theme: string): void
 	if (recommendation) {
 		const banner = outer.createDiv({ cls: 'he-recommendation' });
 		banner.createEl('strong', { text: 'Recommendation: ' });
-		banner.appendChild(banner.ownerDocument.createTextNode(' '));
+		banner.appendText(' ');
 		applyInline(banner, recommendation);
 	}
 }
@@ -960,10 +960,12 @@ class ConfirmModal extends Modal {
 			.addButton(button => button
 				.setButtonText(t('Cancel', '取消'))
 				.onClick(() => this.finish(false)))
-			.addButton(button => button
-				.setButtonText(t('Discard changes', '放弃修改'))
-				.setWarning()
-				.onClick(() => this.finish(true)));
+			.addButton(button => {
+				button
+					.setButtonText(t('Discard changes', '放弃修改'))
+					.onClick(() => this.finish(true));
+				button.buttonEl.addClass('mod-warning');
+			});
 	}
 
 	onClose(): void {

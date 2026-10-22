@@ -169,13 +169,13 @@ function applyInline(parent, text) {
     parts.push({ type: "text", content: escaped.slice(lastIndex) });
   }
   if (parts.length === 0) {
-    parent.appendChild(parent.ownerDocument.createTextNode(escaped));
+    parent.appendText(escaped);
     return;
   }
   for (const part of parts) {
     switch (part.type) {
       case "text":
-        parent.appendChild(parent.ownerDocument.createTextNode(part.content));
+        parent.appendText(part.content);
         break;
       case "bold":
         parent.createEl("strong", { text: part.content });
@@ -337,7 +337,7 @@ function buildCompare(parent, content, theme) {
     if (col.metrics.length > 0) {
       const footer = card.createEl("footer", { cls: "he-metrics" });
       for (const mLine of col.metrics) {
-        const span = footer.createEl("span");
+        const span = footer.createSpan();
         applyInline(span, mLine);
       }
     }
@@ -345,7 +345,7 @@ function buildCompare(parent, content, theme) {
   if (recommendation) {
     const banner = outer.createDiv({ cls: "he-recommendation" });
     banner.createEl("strong", { text: "Recommendation: " });
-    banner.appendChild(banner.ownerDocument.createTextNode(" "));
+    banner.appendText(" ");
     applyInline(banner, recommendation);
   }
 }
@@ -886,7 +886,10 @@ var ConfirmModal = class extends import_obsidian.Modal {
   onOpen() {
     this.titleEl.setText(t("Unsaved changes", "\u672A\u4FDD\u5B58\u7684\u4FEE\u6539"));
     this.contentEl.createEl("p", { text: this.message });
-    new import_obsidian.Setting(this.contentEl).addButton((button) => button.setButtonText(t("Cancel", "\u53D6\u6D88")).onClick(() => this.finish(false))).addButton((button) => button.setButtonText(t("Discard changes", "\u653E\u5F03\u4FEE\u6539")).setWarning().onClick(() => this.finish(true)));
+    new import_obsidian.Setting(this.contentEl).addButton((button) => button.setButtonText(t("Cancel", "\u53D6\u6D88")).onClick(() => this.finish(false))).addButton((button) => {
+      button.setButtonText(t("Discard changes", "\u653E\u5F03\u4FEE\u6539")).onClick(() => this.finish(true));
+      button.buttonEl.addClass("mod-warning");
+    });
   }
   onClose() {
     this.contentEl.empty();
