@@ -833,6 +833,21 @@
   cursor: pointer;
   font-size: var(--font-ui-small);
 }
+.he-view-modes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.he-view-toggle-active {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+.he-view-toggle-active:hover {
+  background: var(--interactive-accent-hover);
+}
+.he-wysiwyg-iframe {
+  cursor: text;
+}
 .he-view-save {
   color: var(--text-on-accent);
   background: var(--interactive-accent);

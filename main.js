@@ -925,16 +925,20 @@ var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
   }
   getDisplayText() {
     const base = this.file ? this.file.basename : "HTML Preview";
-    return this.mode === "edit" ? base + " (Edit)" : base;
+    if (this.mode === "edit")
+      return base + " (Source)";
+    if (this.mode === "wysiwyg")
+      return base + " (Edit)";
+    return base;
   }
   getIcon() {
-    return this.mode === "edit" ? "pencil" : "eye";
+    return this.mode === "edit" ? "code" : this.mode === "wysiwyg" ? "pencil" : "eye";
   }
   async setState(state) {
     if (state?.file && typeof state.file === "string") {
       const file = this.app.vault.getFileByPath(state.file);
       if (file) {
-        this.mode = state.mode === "edit" ? "edit" : "preview";
+        this.mode = state.mode === "edit" ? "edit" : state.mode === "wysiwyg" ? "wysiwyg" : "preview";
         await this.setFile(file);
       }
     }
@@ -963,36 +967,103 @@ var HEHTMLView = class _HEHTMLView extends import_obsidian.ItemView {
     this.iframe = null;
     this.textarea = null;
     const toolbar = container.createDiv({ cls: "he-view-toolbar" });
-    const toggle = toolbar.createEl("button", {
-      cls: "he-view-toggle",
-      text: this.mode === "preview" ? t("\u270F\uFE0F Edit", "\u270F\uFE0F \u7F16\u8F91") : t("\u{1F441} Preview", "\u{1F441} \u9884\u89C8")
-    });
-    toggle.addEventListener("click", () => void this.toggleMode());
+    const modeGroup = toolbar.createDiv({ cls: "he-view-modes" });
+    const modeButtons = [
+      { mode: "preview", label: t("\u{1F441} Preview", "\u{1F441} \u9884\u89C8") },
+      { mode: "wysiwyg", label: t("\u270F\uFE0F Edit", "\u270F\uFE0F \u7F16\u8F91") },
+      { mode: "edit", label: t("</> Source", "</> \u6E90\u7801") }
+    ];
+    for (const mb of modeButtons) {
+      const btn = modeGroup.createEl("button", {
+        cls: "he-view-toggle" + (this.mode === mb.mode ? " he-view-toggle-active" : ""),
+        text: mb.label
+      });
+      btn.addEventListener("click", () => void this.switchMode(mb.mode));
+    }
     const save = toolbar.createEl("button", {
       cls: "he-view-save",
       text: t("\u{1F4BE} Save (Ctrl+S)", "\u{1F4BE} \u4FDD\u5B58\uFF08Ctrl+S\uFF09")
     });
-    save.hidden = this.mode !== "edit";
+    save.hidden = this.mode === "preview";
     save.addEventListener("click", () => void this.saveFile());
     if (this.mode === "edit") {
       await this.loadEditor();
+    } else if (this.mode === "wysiwyg") {
+      await this.loadWysiwyg();
     } else {
       await this.loadContent();
     }
   }
-  async toggleMode() {
-    if (this.mode === "edit" && this.dirty) {
+  async switchMode(target) {
+    if (target === this.mode)
+      return;
+    if (this.mode !== "preview" && this.dirty) {
       if (!await confirmDiscardChanges(this.app))
         return;
     }
     this.dirty = false;
-    this.mode = this.mode === "preview" ? "edit" : "preview";
+    this.mode = target;
     await this.render();
   }
-  async saveFile() {
-    if (!this.file || !this.textarea)
+  /** Serialize the WYSIWYG iframe DOM back to HTML.
+   * The WYSIWYG iframe injects nothing of its own, so the live DOM is the
+   * document as the user sees it. We keep <script>/<style> and page chrome
+   * (e.g. the page's own zoom controls) untouched so JS-rendered pages keep
+   * working after save; only edited text/structure is written back. */
+  serializeWysiwyg() {
+    if (!this.iframe || !this.iframe.contentDocument)
+      return null;
+    const doc = this.iframe.contentDocument;
+    const doctype = doc.doctype ? `<!DOCTYPE ${doc.doctype.name}>
+` : "<!DOCTYPE html>\n";
+    const clone = doc.documentElement.cloneNode(true);
+    clone.querySelectorAll("[contenteditable]").forEach((el) => el.removeAttribute("contenteditable"));
+    clone.querySelectorAll('[spellcheck="false"]').forEach((el) => el.removeAttribute("spellcheck"));
+    return doctype + clone.outerHTML + "\n";
+  }
+  async loadWysiwyg() {
+    if (!this.file)
       return;
-    const newText = this.textarea.value;
+    const content = await this.app.vault.read(this.file);
+    const container = this.contentEl;
+    this.iframe = container.createEl("iframe", { cls: "he-htmlview-iframe he-wysiwyg-iframe" });
+    this.iframe.setAttribute(
+      "sandbox",
+      "allow-same-origin allow-scripts allow-forms allow-modals allow-popups allow-downloads"
+    );
+    this.iframe.setAttribute("srcdoc", content);
+    this.iframe.addEventListener("load", () => {
+      const doc = this.iframe?.contentDocument;
+      if (!doc || !doc.body)
+        return;
+      doc.body.contentEditable = "true";
+      doc.body.spellcheck = false;
+      try {
+        doc.defaultView.addEventListener("keydown", (e) => {
+          if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "s" || e.key === "S")) {
+            e.preventDefault();
+            void this.saveFile();
+          }
+        });
+        doc.addEventListener("input", () => {
+          this.dirty = true;
+        });
+      } catch {
+      }
+    });
+    this.dirty = false;
+  }
+  async saveFile() {
+    if (!this.file)
+      return;
+    let newText = null;
+    if (this.mode === "edit" && this.textarea) {
+      newText = this.textarea.value;
+    } else if (this.mode === "wysiwyg") {
+      newText = this.serializeWysiwyg();
+    }
+    if (newText === null)
+      return;
     const current = await this.app.vault.read(this.file);
     if (newText === current) {
       this.dirty = false;
@@ -1130,7 +1201,7 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
       if (file instanceof import_obsidian.TFile && file.extension === "html") {
         for (const view of this.views) {
           if (view.file?.path === file.path) {
-            if (view.mode === "edit")
+            if (view.mode !== "preview")
               continue;
             void view.setFile(file);
           }
@@ -1144,8 +1215,9 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
         const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
         if (!active)
           return false;
-        if (!checking)
-          void active.toggleMode();
+        if (!checking) {
+          void active.switchMode(active.mode === "preview" ? "wysiwyg" : "preview");
+        }
         return true;
       }
     });
@@ -1154,7 +1226,7 @@ var HEExtPlugin = class extends import_obsidian.Plugin {
       name: t("Save HTML file (edit mode)", "\u4FDD\u5B58 HTML \u6587\u4EF6\uFF08\u7F16\u8F91\u6A21\u5F0F\uFF09"),
       checkCallback: (checking) => {
         const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
-        if (!active || active.mode !== "edit")
+        if (!active || active.mode === "preview")
           return false;
         if (!checking)
           void active.saveFile();

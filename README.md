@@ -44,7 +44,7 @@ Open `.html` files directly in Obsidian with full rendering:
 - **Image support**: relative-path images are rewritten to Obsidian resource URLs
 - **Live refresh**: the view updates automatically when the `.html` file is edited
 - **Interactivity**: the iframe sandbox includes `allow-scripts`, so JavaScript interactions work
-- **In-app editing**: click "✏️ Edit" in the toolbar to edit the raw HTML text, then save with Ctrl/Cmd+S or the "💾 Save" button (overwrites the original file); "👁 Preview" switches back to rendering. Unsaved changes are confirmed before discard
+- **WYSIWYG text editing**: click "✏️ Edit" to edit the rendered page in place — click any text and type, formatting stays intact. Save with Ctrl/Cmd+S or "💾 Save" (overwrites the original file). "</> Source" switches to raw HTML text editing
 - **Edit commands**: "Toggle edit/preview mode for HTML viewer" and "Save HTML file (edit mode)" in the command palette
 
 #### More
@@ -127,7 +127,7 @@ In the Obsidian file explorer:
 
 #### 1.1.0
 
-- **In-app editing**: edit raw HTML text directly in the viewer via a toolbar toggle; Ctrl/Cmd+S or the Save button overwrites the original file
+- **WYSIWYG text editing**: edit the rendered page in place (contenteditable) via the toolbar; "</> Source" edits raw HTML. Ctrl/Cmd+S or Save overwrites the original file
 - Unsaved changes are confirmed before switching back to preview
 
 #### 1.0.24
@@ -214,7 +214,7 @@ AI 生成的 HTML 报告（行业周报、分析报告、数据仪表盘等）�
 - **图片支持**：相对路径图片自动转换为 Obsidian 资源 URL
 - **实时刷新**：编辑 .html 文件后视图自动更新
 - **交互支持**：iframe sandbox 包含 allow-scripts，支持 JavaScript 交互
-- **应用内编辑**：点击工具栏 "✏️ Edit" 直接编辑 HTML 源文本，Ctrl/Cmd+S 或 "💾 Save" 按钮覆盖保存原文件；"👁 Preview" 切回渲染视图。有未保存修改时切换预览会先确认
+- **所见即所得编辑**：点击 "✏️ Edit" 直接在渲染页面上改文字（点哪改哪，样式保持不变），Ctrl/Cmd+S 或 "💾 Save" 覆盖保存原文件；"</> 源码" 切换为原始 HTML 文本编辑。有未保存修改时切换会先确认
 - **编辑命令**：命令面板提供 "Toggle edit/preview mode for HTML viewer" 与 "Save HTML file (edit mode)"
 
 #### 其他
