@@ -992,7 +992,7 @@ function confirmDiscardChanges(app: App): Promise<boolean> {
 
 class HEHTMLView extends ItemView {
 	file: TFile | null = null;
-	mode: 'preview' | 'edit' = 'preview';
+	mode: 'preview' | 'edit' | 'wysiwyg' = 'preview';
 	dirty = false;
 	private iframe: HTMLIFrameElement | null = null;
 	private textarea: HTMLTextAreaElement | null = null;
@@ -1007,18 +1007,21 @@ class HEHTMLView extends ItemView {
 
 	getDisplayText(): string {
 		const base = this.file ? this.file.basename : 'HTML Preview';
-		return this.mode === 'edit' ? base + ' (Edit)' : base;
+		if (this.mode === 'edit') return base + ' (Source)';
+		if (this.mode === 'wysiwyg') return base + ' (Edit)';
+		return base;
 	}
 
 	getIcon(): string {
-		return this.mode === 'edit' ? 'pencil' : 'eye';
+		return this.mode === 'edit' ? 'code' : this.mode === 'wysiwyg' ? 'pencil' : 'eye';
 	}
 
 	async setState(state: Record<string, unknown>): Promise<void> {
 		if (state?.file && typeof state.file === 'string') {
 			const file = this.app.vault.getFileByPath(state.file);
 			if (file) {
-				this.mode = state.mode === 'edit' ? 'edit' : 'preview';
+				// 'edit' (legacy) means source mode; 'wysiwyg' is the WYSIWYG text editor.
+				this.mode = state.mode === 'edit' ? 'edit' : state.mode === 'wysiwyg' ? 'wysiwyg' : 'preview';
 				await this.setFile(file);
 			}
 		}
@@ -1052,37 +1055,114 @@ class HEHTMLView extends ItemView {
 		this.textarea = null;
 
 		const toolbar = container.createDiv({ cls: 'he-view-toolbar' });
-		const toggle = toolbar.createEl('button', {
-			cls: 'he-view-toggle',
-			text: this.mode === 'preview' ? t('✏️ Edit', '✏️ 编辑') : t('👁 Preview', '👁 预览')
-		});
-		toggle.addEventListener('click', () => void this.toggleMode());
+		const modeGroup = toolbar.createDiv({ cls: 'he-view-modes' });
+		const modeButtons: Array<{ mode: 'preview' | 'wysiwyg' | 'edit'; label: string }> = [
+			{ mode: 'preview', label: t('👁 Preview', '👁 预览') },
+			{ mode: 'wysiwyg', label: t('✏️ Edit', '✏️ 编辑') },
+			{ mode: 'edit', label: t('</> Source', '</> 源码') },
+		];
+		for (const mb of modeButtons) {
+			const btn = modeGroup.createEl('button', {
+				cls: 'he-view-toggle' + (this.mode === mb.mode ? ' he-view-toggle-active' : ''),
+				text: mb.label,
+			});
+			btn.addEventListener('click', () => void this.switchMode(mb.mode));
+		}
 		const save = toolbar.createEl('button', {
 			cls: 'he-view-save',
 			text: t('💾 Save (Ctrl+S)', '💾 保存（Ctrl+S）')
 		});
-		save.hidden = this.mode !== 'edit';
+		save.hidden = this.mode === 'preview';
 		save.addEventListener('click', () => void this.saveFile());
 
 		if (this.mode === 'edit') {
 			await this.loadEditor();
+		} else if (this.mode === 'wysiwyg') {
+			await this.loadWysiwyg();
 		} else {
 			await this.loadContent();
 		}
 	}
 
-	async toggleMode(): Promise<void> {
-		if (this.mode === 'edit' && this.dirty) {
+	async switchMode(target: 'preview' | 'wysiwyg' | 'edit'): Promise<void> {
+		if (target === this.mode) return;
+		if (this.mode !== 'preview' && this.dirty) {
 			if (!(await confirmDiscardChanges(this.app))) return;
 		}
 		this.dirty = false;
-		this.mode = this.mode === 'preview' ? 'edit' : 'preview';
+		this.mode = target;
 		await this.render();
 	}
 
+	/** Serialize the WYSIWYG iframe DOM back to HTML: drop our injected chrome
+	 * (zoom bar/wrapper/style/script) and behavior <script> tags so re-rendering
+	 * stays idempotent, then pretty-close to the original document shape. */
+	private serializeWysiwyg(): string | null {
+		if (!this.iframe || !this.iframe.contentDocument) return null;
+		const doc = this.iframe.contentDocument;
+		const clone = doc.documentElement.cloneNode(true) as HTMLElement;
+		// unwrap the zoom container wrapper we injected in preview
+		const wrapper = clone.querySelector('.zoom-container');
+		if (wrapper) {
+			while (wrapper.firstChild) clone.querySelector('body')?.appendChild(wrapper.firstChild);
+			wrapper.remove();
+		}
+		clone.querySelectorAll('.zoom-bar').forEach(el => el.remove());
+		// remove our injected zoom style/script (they carry the zoom-container/zoom-bar classes)
+		clone.querySelectorAll('style, script').forEach(el => {
+			const text = el.textContent || '';
+			if (text.includes('zoom-container') || text.includes('zoom-bar')) el.remove();
+		});
+		// strip remaining <script> tags: they are behavior, not text content, and
+		// keeping them after DOM mutation risks double-rendering (e.g. SPA mounts)
+		clone.querySelectorAll('script').forEach(el => el.remove());
+		const bodyHtml = clone.querySelector('body')?.innerHTML ?? '';
+		const headHtml = clone.querySelector('head')?.innerHTML ?? '';
+		const attrs = Array.from(clone.attributes)
+			.map(a => ` ${a.name}="${a.value}"`)
+			.join('');
+		return `<!DOCTYPE html>\n<html${attrs}>\n<head>\n${headHtml}\n</head>\n<body>\n${bodyHtml}\n</body>\n</html>\n`;
+	}
+
+	private async loadWysiwyg(): Promise<void> {
+		if (!this.file) return;
+		const content = await this.app.vault.read(this.file);
+		const container = this.contentEl;
+		this.iframe = container.createEl('iframe', { cls: 'he-htmlview-iframe he-wysiwyg-iframe' });
+		this.iframe.setAttribute(
+			'sandbox',
+			'allow-same-origin allow-forms allow-popups allow-downloads',
+		);
+		this.iframe.setAttribute('srcdoc', content);
+		this.iframe.addEventListener('load', () => {
+			const doc = this.iframe?.contentDocument;
+			if (!doc || !doc.body) return;
+			doc.body.contentEditable = 'true';
+			doc.body.spellcheck = false;
+			try {
+				(doc.defaultView as Window).addEventListener('keydown', (e: KeyboardEvent) => {
+					if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 's' || e.key === 'S')) {
+						e.preventDefault();
+						void this.saveFile();
+					}
+				});
+				doc.addEventListener('input', () => { this.dirty = true; });
+			} catch {
+				// sandboxed doc not accessible; leave read-only
+			}
+		});
+		this.dirty = false;
+	}
+
 	async saveFile(): Promise<void> {
-		if (!this.file || !this.textarea) return;
-		const newText = this.textarea.value;
+		if (!this.file) return;
+		let newText: string | null = null;
+		if (this.mode === 'edit' && this.textarea) {
+			newText = this.textarea.value;
+		} else if (this.mode === 'wysiwyg') {
+			newText = this.serializeWysiwyg();
+		}
+		if (newText === null) return;
 		const current = await this.app.vault.read(this.file);
 		if (newText === current) {
 			this.dirty = false;
@@ -1233,7 +1313,7 @@ export default class HEExtPlugin extends Plugin {
 				for (const view of this.views) {
 					if (view.file?.path === file.path) {
 						// Don't clobber an editor the user is actively working in
-						if (view.mode === 'edit') continue;
+						if (view.mode !== 'preview') continue;
 						void view.setFile(file);
 					}
 				}
@@ -1246,7 +1326,10 @@ export default class HEExtPlugin extends Plugin {
 			checkCallback: (checking) => {
 				const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
 				if (!active) return false;
-				if (!checking) void active.toggleMode();
+				if (!checking) {
+					// toggle between preview and WYSIWYG text editing
+					void active.switchMode(active.mode === 'preview' ? 'wysiwyg' : 'preview');
+				}
 				return true;
 			}
 		});
@@ -1256,7 +1339,7 @@ export default class HEExtPlugin extends Plugin {
 			name: t('Save HTML file (edit mode)', '保存 HTML 文件（编辑模式）'),
 			checkCallback: (checking) => {
 				const active = this.app.workspace.getActiveViewOfType(HEHTMLView);
-				if (!active || active.mode !== 'edit') return false;
+				if (!active || active.mode === 'preview') return false;
 				if (!checking) void active.saveFile();
 				return true;
 			}
